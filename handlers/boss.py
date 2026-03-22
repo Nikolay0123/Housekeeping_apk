@@ -70,6 +70,7 @@ def build_linen_variant_markup_and_header(room_name: str, linen_profile: str) ->
         builder.row(InlineKeyboardButton(text="Вариант 1", callback_data="lset_1"))
         builder.row(InlineKeyboardButton(text="Вариант 2", callback_data="lset_2"))
         builder.row(InlineKeyboardButton(text="Вариант 3", callback_data="lset_3"))
+        builder.row(InlineKeyboardButton(text="Вариант 4", callback_data="lset_4"))
         header = f"Выберите вариант комплектации белья для номера:\n<b>{room_name}</b>"
     builder.row(InlineKeyboardButton(text="🔙 Отмена", callback_data="lset_cancel"))
     return header, builder.as_markup()
