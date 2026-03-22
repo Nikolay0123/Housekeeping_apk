@@ -91,6 +91,41 @@ def resolve_linen_profile(queue_item: dict) -> str | None:
     return room_linen_profile(queue_item.get("name") or "")
 
 
+LINEN_FOOT_TOWEL = "Полотенце для ног"
+
+
+def classic_linen_quantities(queue_item: dict) -> dict[str, int] | None:
+    """
+    Фактические количества белья для classic (101–109) с учётом варианта.
+    Вариант 2: при linen_beds == 1 количества в 2 раза меньше (целочисленно);
+    для «Полотенце для ног» — не меньше 1 шт., если в комплекте оно есть (qty > 0).
+    """
+    v = queue_item.get("linen_variant")
+    if not isinstance(v, int) or v not in LINEN_PACKAGES:
+        return None
+    base = LINEN_PACKAGES[v]
+    if v == 2:
+        beds = queue_item.get("linen_beds", 2)
+        if beds not in (1, 2):
+            beds = 2
+        if beds == 1:
+            scaled: dict[str, int] = {}
+            for k, q in base.items():
+                if k == LINEN_FOOT_TOWEL and q > 0:
+                    scaled[k] = max(1, q // 2)
+                else:
+                    scaled[k] = max(0, q // 2)
+            return scaled
+    return dict(base)
+
+
+def classic_variant2_beds_label(beds: int | None) -> int:
+    """1 или 2 кровати для отображения; по умолчанию 2 (старые записи)."""
+    if beds == 1:
+        return 1
+    return 2
+
+
 # Комплекты белья для номеров 101–109
 # Ключ — номер варианта, значение — словарь "Наименование" → количество
 LINEN_PACKAGES: dict[int, dict[str, int]] = {

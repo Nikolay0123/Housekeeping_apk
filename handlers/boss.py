@@ -38,6 +38,8 @@ from utils.helpers import (
     format_linen_color,
     room_linen_profile,
     resolve_linen_profile,
+    classic_linen_quantities,
+    classic_variant2_beds_label,
 )
 
 router = Router()
@@ -121,6 +123,9 @@ async def build_rooms_screen(
                 v = r.get("linen_variant")
                 if lc:
                     suffix = f" (комплект {v}, {lc})"
+            elif resolve_linen_profile(r) == "classic" and r.get("linen_variant") == 2:
+                bk = classic_variant2_beds_label(r.get("linen_beds"))
+                suffix = f" (вар.2, {bk} кров.)"
             lines.append(f"{i}. {r['name']} — {format_area(r['area'])} м² ({ct}){suffix}")
 
     text = "\n".join(lines)
@@ -195,7 +200,12 @@ def format_channel_message(
                 if linen_variant == 1:
                     bed_config = " — кровати соединены"
                 elif linen_variant == 2:
-                    bed_config = " — кровати разъединены"
+                    bk = classic_variant2_beds_label(r.get("linen_beds"))
+                    bed_config = (
+                        " — кровати разъединены, застелить 1 кровать"
+                        if bk == 1
+                        else " — кровати разъединены, застелить 2 кровати"
+                    )
             elif profile == "floor4":
                 col = format_linen_color(r.get("linen_color"))
                 if col:
@@ -212,10 +222,11 @@ def format_channel_message(
                 if ck in LINEN_COLORS:
                     linen_color_totals[LINEN_COLORS[ck]] += sum(pkg.values())
             elif profile == "classic" and linen_variant in LINEN_PACKAGES:
-                pkg = LINEN_PACKAGES[linen_variant]
-                for item_name, qty in pkg.items():
-                    linen_totals[item_name] += qty
-                linen_color_totals["белое"] += sum(pkg.values())
+                pkg = classic_linen_quantities(r)
+                if pkg:
+                    for item_name, qty in pkg.items():
+                        linen_totals[item_name] += qty
+                    linen_color_totals["белое"] += sum(pkg.values())
 
     lines.extend([
         "",
@@ -259,6 +270,10 @@ async def cmd_start(message: Message, state: FSMContext):
     await state.set_state(BossStates.main_menu)
 
 
+@router.callback_query(F.data == "cancel_to_menu", BossStates.selecting_variant2_beds)
+@router.callback_query(F.data == "cancel_to_menu", BossStates.selecting_linen_color)
+@router.callback_query(F.data == "cancel_to_menu", BossStates.selecting_linen_variant)
+@router.callback_query(F.data == "cancel_to_menu", BossStates.selecting_cleaning_type)
 @router.callback_query(F.data == "cancel_to_menu", BossStates.choosing_employee)
 @router.callback_query(F.data == "cancel_to_menu", BossStates.choosing_rooms)
 @router.callback_query(F.data == "cancel_to_menu", BossStates.adding_comment)
@@ -468,6 +483,31 @@ async def linen_variant_chosen(cq: CallbackQuery, state: FSMContext):
         await cq.answer()
         return
 
+    if linen_profile == "classic" and variant == 2:
+        await state.update_data(pending_linen_variant=2)
+        await state.set_state(BossStates.selecting_variant2_beds)
+        kb = InlineKeyboardBuilder()
+        kb.row(
+            InlineKeyboardButton(
+                text="1 кровать (белья в 2 раза меньше)",
+                callback_data="v2bed_1",
+            )
+        )
+        kb.row(
+            InlineKeyboardButton(
+                text="2 кровати (полный комплект)",
+                callback_data="v2bed_2",
+            )
+        )
+        kb.row(InlineKeyboardButton(text="🔙 Назад к вариантам", callback_data="v2bed_cancel"))
+        await cq.message.edit_text(
+            f"Вариант 2 — кровати разъединены.\nНомер <b>{rname}</b>.\n\nСколько кроватей застелить?",
+            reply_markup=kb.as_markup(),
+            parse_mode="HTML",
+        )
+        await cq.answer()
+        return
+
     selected = list(data.get("selected_rooms", []))
     selected.append(
         {
@@ -490,6 +530,77 @@ async def linen_variant_chosen(cq: CallbackQuery, state: FSMContext):
     )
     await state.set_state(BossStates.choosing_rooms)
 
+    sm = get_async_session_maker()
+    async with sm() as session:
+        text, kb = await build_rooms_screen(
+            session, data["current_employee"], selected, data.get("comment")
+        )
+    await cq.message.edit_text(text, reply_markup=kb)
+    await cq.answer()
+
+
+@router.callback_query(F.data.startswith("v2bed_"), BossStates.selecting_variant2_beds)
+async def variant2_beds_chosen(cq: CallbackQuery, state: FSMContext):
+    """Вариант 2 (101–109): 1 или 2 кровати — масштаб количества белья."""
+    if cq.data == "v2bed_cancel":
+        data = await state.get_data()
+        rname = data.get("pending_room_name")
+        linen_profile = data.get("pending_linen_profile")
+        if not rname or linen_profile != "classic":
+            await state.set_state(BossStates.choosing_rooms)
+            sm = get_async_session_maker()
+            async with sm() as session:
+                text, kb = await build_rooms_screen(
+                    session, data["current_employee"], data.get("selected_rooms", []), data.get("comment")
+                )
+            await cq.message.edit_text(text, reply_markup=kb)
+            await cq.answer("Сессия сброшена.", show_alert=True)
+            return
+        await state.update_data(pending_linen_variant=None)
+        await state.set_state(BossStates.selecting_linen_variant)
+        header, markup = build_linen_variant_markup_and_header(rname, linen_profile)
+        await cq.message.edit_text(header, reply_markup=markup, parse_mode="HTML")
+        await cq.answer()
+        return
+
+    if cq.data not in ("v2bed_1", "v2bed_2"):
+        await cq.answer()
+        return
+    beds = 1 if cq.data == "v2bed_1" else 2
+
+    data = await state.get_data()
+    rid = data.get("pending_room_id")
+    rname = data.get("pending_room_name")
+    rarea = data.get("pending_room_area")
+    cleaning_type = data.get("pending_cleaning_type")
+    variant = data.get("pending_linen_variant")
+
+    if rid is None or cleaning_type is None or variant != 2:
+        await cq.answer("Ошибка. Попробуйте выбрать номер снова.", show_alert=True)
+        await state.set_state(BossStates.choosing_rooms)
+        return
+
+    selected = list(data.get("selected_rooms", []))
+    selected.append(
+        {
+            "id": rid,
+            "name": rname,
+            "area": rarea,
+            "cleaning_type": cleaning_type,
+            "linen_variant": 2,
+            "linen_beds": beds,
+        }
+    )
+    await state.update_data(
+        selected_rooms=selected,
+        pending_room_id=None,
+        pending_room_name=None,
+        pending_room_area=None,
+        pending_linen_profile=None,
+        pending_cleaning_type=None,
+        pending_linen_variant=None,
+    )
+    await state.set_state(BossStates.choosing_rooms)
     sm = get_async_session_maker()
     async with sm() as session:
         text, kb = await build_rooms_screen(
@@ -891,6 +1002,9 @@ async def history_detail(cq: CallbackQuery, state: FSMContext):
             lc = format_linen_color(r.get("linen_color"))
             if lc:
                 extra = f", комплект {r.get('linen_variant')} ({lc})"
+        elif resolve_linen_profile(r) == "classic" and r.get("linen_variant") == 2:
+            bk = classic_variant2_beds_label(r.get("linen_beds"))
+            extra = f", вар.2 — {bk} кров."
         lines.append(f"  {i}. {r.get('name', '')} — {r.get('area', 0):.0f} м² — {ct}{extra}")
     if task.comment:
         lines.append("")

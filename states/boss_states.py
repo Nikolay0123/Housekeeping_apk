@@ -8,6 +8,7 @@ class BossStates(StatesGroup):
     choosing_rooms = State()
     selecting_cleaning_type = State()  # выбор вида уборки для добавляемого номера
     selecting_linen_variant = State()  # вариант комплекта: 101–109 или 4 этаж (401–405)
+    selecting_variant2_beds = State()  # вариант 2 (101–109): 1 или 2 кровати
     selecting_linen_color = State()  # цвет белья для номеров 4 этажа
     adding_comment = State()
     room_management = State()
