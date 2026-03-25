@@ -1,0 +1,13 @@
+.gradle/
+.gradle_dist/
+/.idea/
+/app/build/
+/app/.cxx/
+/app/outputs/
+*.iml
+
+# Local environment
+local.properties
+
+# Temporary helper scripts
+download_gradle_8_7*.ps1
