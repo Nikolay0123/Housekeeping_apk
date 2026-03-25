@@ -7,6 +7,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.IOException
 
 class TelegramClient(
     private val okHttpClient: OkHttpClient = OkHttpClient(),
@@ -33,16 +34,23 @@ class TelegramClient(
             .post(json.toRequestBody("application/json; charset=utf-8".toMediaType()))
             .build()
 
-        okHttpClient.newCall(req).execute().use { resp ->
-            val body = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) {
-                throw IllegalStateException("Telegram HTTP ${resp.code}: $body")
+        try {
+            okHttpClient.newCall(req).execute().use { resp ->
+                val body = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    throw IllegalStateException("Telegram HTTP ${resp.code}: $body")
+                }
+                val parsed = gson.fromJson(body, TelegramSendResponse::class.java)
+                if (parsed.ok != true || parsed.result == null) {
+                    throw IllegalStateException("Telegram error: $body")
+                }
+                parsed.result!!.messageId
             }
-            val parsed = gson.fromJson(body, TelegramSendResponse::class.java)
-            if (parsed.ok != true || parsed.result == null) {
-                throw IllegalStateException("Telegram error: $body")
-            }
-            parsed.result!!.messageId
+        } catch (e: IOException) {
+            throw IllegalStateException(
+                "Нет связи с сервером Telegram. Проверьте интернет и попробуйте снова.",
+                e,
+            )
         }
     }
 

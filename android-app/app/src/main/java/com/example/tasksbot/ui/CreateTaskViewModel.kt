@@ -8,6 +8,7 @@ import com.example.tasksbot.domain.QueueItem
 import com.example.tasksbot.domain.TaskLogic
 import com.example.tasksbot.db.AppDatabase
 import com.example.tasksbot.db.RoomEntity
+import com.example.tasksbot.network.NetworkStatus
 import com.example.tasksbot.repository.RoomsRepository
 import com.example.tasksbot.repository.TasksRepository
 import kotlinx.coroutines.launch
@@ -310,6 +311,12 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         }
         if (botToken.isBlank() || channelId.isBlank()) {
             state.value = current.copy(error = "Не задан BOT_TOKEN или CHANNEL_ID.")
+            return
+        }
+        if (!NetworkStatus.hasInternet(getApplication())) {
+            state.value = current.copy(
+                error = "Нет подключения к интернету. Включите Wi‑Fi или мобильные данные.",
+            )
             return
         }
 
