@@ -21,6 +21,7 @@ import com.example.tasksbot.ui.LoginScreen
 import com.example.tasksbot.ui.MainMenuScreen
 import com.example.tasksbot.ui.RoomManagementScreen
 import com.example.tasksbot.ui.SetupScreen
+import com.example.tasksbot.ui.theme.TasksBotTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
@@ -57,7 +58,7 @@ private fun AppRoot() {
         )
     }
 
-    MaterialTheme {
+    TasksBotTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             when (section) {
                 Section.Setup -> SetupScreen(

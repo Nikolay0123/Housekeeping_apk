@@ -16,6 +16,47 @@ object TaskLogic {
     const val AREA_LIMIT: Double = 375.0
     const val BOSS_NAME: String = "Екатерина"
 
+    /** Группировка номеров на экране выбора:
+     *  - 1 этаж: 101–109
+     *  - 4 этаж: 401.1–401.4, 402.1–402.4, 403, 404.1–405.4
+     *  - Помещения: всё остальное
+     */
+    enum class RoomPickerTab {
+        Floor1,
+        Block404405,
+        Other,
+    }
+
+    fun roomPickerTab(roomName: String): RoomPickerTab {
+        if (!roomName.startsWith("Номер ")) return RoomPickerTab.Other
+        val rest = roomName.removePrefix("Номер ").trim()
+        if (rest.all { it.isDigit() }) {
+            val n = rest.toIntOrNull() ?: return RoomPickerTab.Other
+            return when {
+                n in 101..109 -> RoomPickerTab.Floor1
+                n == 403 -> RoomPickerTab.Block404405
+                else -> RoomPickerTab.Other
+            }
+        }
+        val m = Regex("^(\\d+)\\.(\\d+)$").matchEntire(rest) ?: return RoomPickerTab.Other
+        val major = m.groupValues[1].toInt()
+        val minor = m.groupValues[2].toInt()
+        if (minor !in 1..4) return RoomPickerTab.Other
+        if (major in 401..402) return RoomPickerTab.Block404405
+        if (major in 404..405) return RoomPickerTab.Block404405
+        return RoomPickerTab.Other
+    }
+
+    /** Номера 404.1–405.4 — отдельный шаг «сколько кроватей застелить». */
+    fun isFloor404to405BlockRoom(roomName: String): Boolean {
+        if (!roomName.startsWith("Номер ")) return false
+        val rest = roomName.removePrefix("Номер ").trim()
+        val m = Regex("^(\\d+)\\.(\\d+)$").matchEntire(rest) ?: return false
+        val major = m.groupValues[1].toInt()
+        val minor = m.groupValues[2].toInt()
+        return major in 404..405 && minor in 1..4
+    }
+
     // Виды уборки для каждого номера
     val CLEANING_TYPES: LinkedHashMap<String, String> = linkedMapOf(
         "current" to "текущая",
@@ -190,6 +231,81 @@ object TaskLogic {
         return if (beds == 1) 1 else 2
     }
 
+    fun floor4DefaultBedsForVariant(variant: Int): Int = when (variant) {
+        1 -> 2
+        2 -> 3
+        3 -> 4
+        else -> 2
+    }
+
+    /**
+     * Для 401–403 и т.п. — полный комплект варианта. Для 404.1–405.4 — масштабирование от числа кроватей
+     * (1…4) относительно «базы» варианта (2 / 3 / 4 места).
+     */
+    fun floor4LinenQuantities(item: QueueItem): LinkedHashMap<String, Int>? {
+        val variant = item.linenVariant ?: return null
+        val base = LINEN_PACKAGES_FLOOR4[variant] ?: return null
+        if (resolveLinenProfile(item) != "floor4") return null
+        return LinkedHashMap(base)
+    }
+
+    fun formatLinenPackageLines(pkg: Map<String, Int>): List<String> =
+        pkg.entries.map { (name, qty) -> "• $name — $qty шт." }
+
+    fun classicLinenVariantButtonSubtitle(variant: Int): String {
+        val pkg = LINEN_PACKAGES[variant] ?: return ""
+        return formatLinenPackageLines(pkg).joinToString("\n")
+    }
+
+    fun floor4LinenVariantButtonSubtitle(variant: Int): String {
+        val pkg = LINEN_PACKAGES_FLOOR4[variant] ?: return ""
+        val label = when (variant) {
+            1 -> "База на 2 места (можно уменьшить, если застилается 1 кровать — в блоке 404/405)."
+            2 -> "База на 3 места."
+            3 -> "База на 4 места."
+            else -> ""
+        }
+        val lines = formatLinenPackageLines(pkg)
+        return if (label.isNotEmpty()) "$label\n${lines.joinToString("\n")}" else lines.joinToString("\n")
+    }
+
+    fun classicLinenVariantButtonTitle(variant: Int): String = when (variant) {
+        1 -> "Вариант 1 — двуспальная связка"
+        2 -> "Вариант 2 — две 1,5-спальные"
+        3 -> "Вариант 3 — люкс (4 наволочки)"
+        4 -> "Вариант 4 — люкс + двуспальный пододеяльник"
+        else -> "Вариант $variant"
+    }
+
+    fun floor4LinenVariantButtonTitle(variant: Int): String = when (variant) {
+        1 -> "Комплект на 2 гостя (база для масштаба)"
+        2 -> "Комплект на 3 гостя"
+        3 -> "Комплект на 4 гостя"
+        else -> "Вариант $variant"
+    }
+
+    /** Строки для вставки в текст задания под номером (полный состав белья). */
+    fun formatRoomLinenDetailLines(item: QueueItem): List<String> {
+        val profile = resolveLinenProfile(item) ?: return emptyList()
+        val v = item.linenVariant ?: return emptyList()
+        val lines = mutableListOf<String>()
+        when {
+            profile == "classic" && v in LINEN_PACKAGES -> {
+                val pkg = classicLinenQuantities(item) ?: return emptyList()
+                lines += "🧺 Бельё (${classicLinenVariantButtonTitle(v)}):"
+                lines += formatLinenPackageLines(pkg)
+            }
+            profile == "floor4" && v in LINEN_PACKAGES_FLOOR4 -> {
+                val pkg = floor4LinenQuantities(item) ?: return emptyList()
+                val col = formatLinenColor(item.linenColor)
+                if (col.isNotEmpty()) lines += "Цвет комплекта: $col"
+                lines += "🧺 Состав белья (${floor4LinenVariantButtonTitle(v)}):"
+                lines += formatLinenPackageLines(pkg)
+            }
+        }
+        return lines
+    }
+
     fun formatChannelMessage(
         employeeKey: String,
         queue: List<QueueItem>,
@@ -261,12 +377,17 @@ object TaskLogic {
             val area0 = round(r.area).toInt()
             lines += "${numEmoji} ${r.name} — ${area0} м² — ${ct}$bedConfig"
 
+            val roomLinen = formatRoomLinenDetailLines(r)
+            for (ln in roomLinen) {
+                lines += "    $ln"
+            }
+
             // Totals calculation (под бельё)
             if (r.linenVariant != null) {
                 val variant = r.linenVariant!!
 
                 if (profile == "floor4" && variant in LINEN_PACKAGES_FLOOR4) {
-                    val pkg = LINEN_PACKAGES_FLOOR4[variant] ?: emptyMap()
+                    val pkg = floor4LinenQuantities(r) ?: continue
                     for ((itemName, qty) in pkg) addLinenItem(itemName, qty)
                     val ck = r.linenColor
                     if (ck != null && ck in LINEN_COLORS) {
@@ -278,7 +399,6 @@ object TaskLogic {
                     val pkg = classicLinenQuantities(r)
                     if (pkg != null) {
                         for ((itemName, qty) in pkg) addLinenItem(itemName, qty)
-                        // Python добавляет весь итог "в белое".
                         linenColorTotals["белое"] = (linenColorTotals["белое"] ?: 0) + pkg.values.sum()
                     }
                 }
@@ -360,9 +480,7 @@ object TaskLogic {
 
             if (profile == "floor4" && r.linenVariant != null) {
                 val lc = formatLinenColor(r.linenColor)
-                if (lc.isNotEmpty()) {
-                    extra = ", комплект ${r.linenVariant} ($lc)"
-                }
+                if (lc.isNotEmpty()) extra = ", комплект ${r.linenVariant} ($lc)"
             } else if (profile == "classic" && r.linenVariant == 2) {
                 val bk = classicVariant2BedsLabel(r.linenBeds)
                 extra = ", вар.2 — ${bk} кров."
@@ -370,6 +488,9 @@ object TaskLogic {
 
             val area0 = round(r.area).toInt()
             lines += "  ${i}. ${r.name} — ${area0} м² — ${ct}$extra"
+            for (ln in formatRoomLinenDetailLines(r)) {
+                lines += "     $ln"
+            }
         }
 
         if (!comment.isNullOrBlank()) {

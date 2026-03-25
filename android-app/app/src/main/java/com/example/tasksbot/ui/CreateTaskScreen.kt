@@ -1,5 +1,6 @@
 package com.example.tasksbot.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,24 +9,33 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.tasksbot.domain.QueueItem
 import com.example.tasksbot.domain.TaskLogic
@@ -44,19 +54,23 @@ fun CreateTaskScreen(
     var isCommentDialogOpen by remember { mutableStateOf(false) }
     var draftComment by remember { mutableStateOf(s.comment ?: "") }
 
-    // Синхронизируем локальный черновик, когда открываем диалог
-    if (isCommentDialogOpen && draftComment != (s.comment ?: "")) {
-        draftComment = s.comment ?: ""
+    LaunchedEffect(isCommentDialogOpen) {
+        if (isCommentDialogOpen) {
+            draftComment = s.comment ?: ""
+        }
     }
 
     Scaffold(
         topBar = {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Создать новое задание", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = { onBackToMenu() }) { Text("🔙 В меню") }
-                }
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                Text(
+                    "Новое задание",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                TextButton(onClick = { onBackToMenu() }) { Text("← В меню") }
             }
         },
     ) { paddingValues ->
@@ -115,27 +129,54 @@ private fun CreateTaskBody(
     when (state.step) {
         CreateTaskViewModel.Step.ChooseEmployee -> {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("👤 Для кого это задание?\n\nДина, Лена или Оля — кнопки ниже.")
-                Button(onClick = { createVm.selectEmployee("dina") }, modifier = Modifier.fillMaxWidth()) { Text("👩 ДИНА") }
-                Button(onClick = { createVm.selectEmployee("lena") }, modifier = Modifier.fillMaxWidth()) { Text("👩 ЛЕНА") }
-                Button(onClick = { createVm.selectEmployee("olya") }, modifier = Modifier.fillMaxWidth()) { Text("👩 ОЛЯ") }
+                Text(
+                    "Кто выполняет задание?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text("Выберите сотрудника:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Button(onClick = { createVm.selectEmployee("dina") }, modifier = Modifier.fillMaxWidth()) { Text("Дина") }
+                Button(onClick = { createVm.selectEmployee("lena") }, modifier = Modifier.fillMaxWidth()) { Text("Лена") }
+                Button(onClick = { createVm.selectEmployee("olya") }, modifier = Modifier.fillMaxWidth()) { Text("Оля") }
                 Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = { onBackToMenu() }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("🔙 Назад в меню") }
+                TextButton(onClick = { onBackToMenu() }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Назад в меню") }
             }
         }
 
         CreateTaskViewModel.Step.Rooms -> {
             val totalArea = state.selectedRooms.sumOf { it.area }
             val selectedIds = state.selectedRooms.map { it.id }.toSet()
+            var roomTab by remember { mutableStateOf(TaskLogic.RoomPickerTab.Floor1) }
+            val tabRows = TaskLogic.RoomPickerTab.entries
+            val tabLabel: (TaskLogic.RoomPickerTab) -> String = {
+                when (it) {
+                    TaskLogic.RoomPickerTab.Floor1 -> "1 этаж\n101–109"
+                    TaskLogic.RoomPickerTab.Block404405 -> "4 этаж\n401.1–402.4, 403, 404.1–405.4"
+                    TaskLogic.RoomPickerTab.Other -> "Помещения"
+                }
+            }
 
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("👤 Задание для: ${TaskLogic.formatEmployeeName(state.currentEmployeeKey)}")
-                Text("🏠 Лимит: ${TaskLogic.formatArea(totalArea)} / ${TaskLogic.formatArea(TaskLogic.AREA_LIMIT)} м²")
-                Divider()
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                ) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            TaskLogic.formatEmployeeName(state.currentEmployeeKey),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            "Площадь: ${TaskLogic.formatArea(totalArea)} / ${TaskLogic.formatArea(TaskLogic.AREA_LIMIT)} м²",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
 
-                Text("📋 ОЧЕРЕДЬ УБОРКИ:")
+                Text("Очередь уборки", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
                 if (state.selectedRooms.isEmpty()) {
-                    Text("(пока пусто)")
+                    Text("Пока пусто — добавьте помещения ниже.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
                 } else {
                     state.selectedRooms.forEachIndexed { idx, item ->
                         QueueRow(
@@ -150,60 +191,110 @@ private fun CreateTaskBody(
                     }
                 }
 
-                Divider()
-                Text("🏠 ДОСТУПНЫЕ ПОМЕЩЕНИЯ:")
+                Spacer(Modifier.height(4.dp))
+                Text("Добавить в очередь", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
 
-                // Список всех активных помещений (как в build_rooms_screen у бота)
-                state.activeRooms.forEach { room ->
-                    val inSelected = selectedIds.contains(room.id)
-                    val areaText = String.format(java.util.Locale.US, "%.2f", room.area)
-                    val suffix = if (inSelected) " ✓" else ""
-                    Button(
-                        onClick = { createVm.addRoomStart(room) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("${room.name} ($areaText м²)$suffix", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                ) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ScrollableTabRow(
+                            selectedTabIndex = tabRows.indexOf(roomTab).coerceIn(0, tabRows.lastIndex),
+                            edgePadding = 0.dp,
+                        ) {
+                            tabRows.forEach { tab ->
+                                Tab(
+                                    selected = roomTab == tab,
+                                    onClick = { roomTab = tab },
+                                    text = {
+                                        Text(
+                                            tabLabel(tab),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 2,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                        val filtered = state.activeRooms.filter { TaskLogic.roomPickerTab(it.name) == roomTab }
+                        if (filtered.isEmpty()) {
+                            Text(
+                                "Нет активных помещений в этой группе.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            filtered.forEach { room ->
+                                val inSelected = selectedIds.contains(room.id)
+                                val areaText = String.format(java.util.Locale.US, "%.2f", room.area)
+                                val suffix = if (inSelected) " ✓ в очереди" else ""
+                                FilledTonalButton(
+                                    onClick = { createVm.addRoomStart(room) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(
+                                        "${room.name} ($areaText м²)$suffix",
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
-                Divider()
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = {
-                            val token = authVm.botToken.value ?: ""
-                            val channelId = authVm.channelId.value ?: ""
-                            createVm.sendTask(token, channelId)
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = !state.isSending,
-                    ) {
-                        if (state.isSending) {
-                            CircularProgressIndicator(modifier = Modifier.height(20.dp))
-                        } else {
-                            Text("✅ ОТПРАВИТЬ ЗАДАНИЕ")
-                        }
+                Spacer(Modifier.height(4.dp))
+                Button(
+                    onClick = {
+                        val token = authVm.botToken.value ?: ""
+                        val channelId = authVm.channelId.value ?: ""
+                        createVm.sendTask(token, channelId)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.isSending,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                ) {
+                    if (state.isSending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.height(22.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Text("Отправить в Telegram")
                     }
+                }
+                FilledTonalButton(
+                    onClick = { createVm.sendTaskViber() },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.isSending,
+                ) { Text("Открыть Viber с текстом задания") }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = onCommentOpen,
                         modifier = Modifier.weight(1f),
-                    ) { Text("💬 Комментарий") }
-                }
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        enabled = !state.isSending,
+                    ) { Text("Комментарий") }
                     Button(
                         onClick = { createVm.clearQueue() },
                         modifier = Modifier.weight(1f),
-                    ) { Text("❌ ОЧИСТИТЬ ВСЁ") }
-
-                    Button(
-                        onClick = { createVm.changeEmployee() },
-                        modifier = Modifier.weight(1f),
-                    ) { Text("🔙 Другой сотрудник") }
+                        enabled = !state.isSending,
+                    ) { Text("Очистить") }
                 }
+                TextButton(
+                    onClick = { createVm.changeEmployee() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Другой сотрудник") }
 
-                state.error?.let { Text("Ошибка: $it") }
+                state.error?.let {
+                    Text(
+                        it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
 
@@ -240,24 +331,42 @@ private fun CreateTaskBody(
                 return
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "Комплектация белья",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    room.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 if (linenProfile == "floor4") {
                     Text(
-                        text = "Выберите вариант комплектации белья для номера: ${room.name}\n\nКаждый вариант: простыня 1,5, пододеяльник 1,5, полотенце банное, полотенце 40×70.",
+                        "Базовый набор для этажа: простыня 1,5 спальная, пододеяльник 1,5 спальный, наволочка, полотенце банное, полотенце 40×70. Для номеров 404.1–405.4 после цвета уточним число кроватей.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Button(onClick = { createVm.chooseLinenVariant(1) }, modifier = Modifier.fillMaxWidth()) { Text("Вариант 1 (по 2 шт.)") }
-                    Button(onClick = { createVm.chooseLinenVariant(2) }, modifier = Modifier.fillMaxWidth()) { Text("Вариант 2 (по 3 шт.)") }
-                    Button(onClick = { createVm.chooseLinenVariant(3) }, modifier = Modifier.fillMaxWidth()) { Text("Вариант 3 (по 4 шт.)") }
+                    for (v in 1..3) {
+                        LinenVariantCard(
+                            title = TaskLogic.floor4LinenVariantButtonTitle(v),
+                            subtitle = TaskLogic.floor4LinenVariantButtonSubtitle(v),
+                            onClick = { createVm.chooseLinenVariant(v) },
+                        )
+                    }
                 } else {
-                    Text("Выберите вариант комплектации белья для номера: ${room.name}")
-                    Button(onClick = { createVm.chooseLinenVariant(1) }, modifier = Modifier.fillMaxWidth()) { Text("Вариант 1") }
-                    Button(onClick = { createVm.chooseLinenVariant(2) }, modifier = Modifier.fillMaxWidth()) { Text("Вариант 2") }
-                    Button(onClick = { createVm.chooseLinenVariant(3) }, modifier = Modifier.fillMaxWidth()) { Text("Вариант 3") }
-                    Button(onClick = { createVm.chooseLinenVariant(4) }, modifier = Modifier.fillMaxWidth()) { Text("Вариант 4") }
+                    for (v in 1..4) {
+                        LinenVariantCard(
+                            title = TaskLogic.classicLinenVariantButtonTitle(v),
+                            subtitle = TaskLogic.classicLinenVariantButtonSubtitle(v),
+                            onClick = { createVm.chooseLinenVariant(v) },
+                        )
+                    }
                 }
 
-                Button(onClick = { createVm.cancelLinenVariantFlow() }, modifier = Modifier.fillMaxWidth()) { Text("🔙 Отмена") }
-                state.error?.let { Text("Ошибка: $it") }
+                TextButton(onClick = { createVm.cancelLinenVariantFlow() }, modifier = Modifier.fillMaxWidth()) { Text("Отмена") }
+                state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         }
 
@@ -270,15 +379,20 @@ private fun CreateTaskBody(
                 return
             }
             Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("Цвет белья для ${room.name} (комплект вариант $variant):")
+                Text(
+                    "Цвет белья",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text("${room.name} · ${TaskLogic.floor4LinenVariantButtonTitle(variant)}")
                 Divider()
                 val keys = listOf("blue", "gray", "stripe", "white")
                 for (key in keys) {
                     val label = TaskLogic.LINEN_COLORS[key] ?: key
                     Button(onClick = { createVm.chooseLinenColor(key) }, modifier = Modifier.fillMaxWidth()) { Text(label) }
                 }
-                Button(onClick = { createVm.cancelToLinenVariantFromColor() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("🔙 Назад к вариантам")
+                TextButton(onClick = { createVm.cancelToLinenVariantFromColor() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Назад к вариантам")
                 }
             }
         }
@@ -332,20 +446,60 @@ private fun CreateTaskBody(
             val empName = TaskLogic.formatEmployeeName(state.currentEmployeeKey)
             val total0 = state.lastSentTotalArea?.let { round(it).toInt() }
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("✅ ГОТОВО!")
-                Text("Задание для $empName отправлено в канал.")
+                Text("Готово", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                when (state.lastSentChannel) {
+                    "viber" -> {
+                        Text("Задание для $empName сохранено в истории. Должен открыться Viber — выберите чат или контакт и отправьте текст.")
+                        Text("Если Viber не установлен, откроется список приложений для отправки.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    else -> Text("Задание для $empName отправлено в Telegram-канал.")
+                }
                 if (total0 != null) {
                     Text("Общая площадь: $total0 м²")
                 }
 
                 Button(onClick = { createVm.startNewTask() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("📝 СОЗДАТЬ НОВОЕ ЗАДАНИЕ")
+                    Text("Создать новое задание")
                 }
-                Button(onClick = onGoToHistory, modifier = Modifier.fillMaxWidth()) {
-                    Text("📋 ИСТОРИЯ")
+                FilledTonalButton(onClick = onGoToHistory, modifier = Modifier.fillMaxWidth()) {
+                    Text("История")
                 }
-                Button(onClick = onBackToMenu, modifier = Modifier.fillMaxWidth()) { Text("🔙 В меню") }
+                TextButton(onClick = onBackToMenu, modifier = Modifier.fillMaxWidth()) { Text("В меню") }
             }
+        }
+    }
+}
+
+@Composable
+private fun LinenVariantCard(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(
+            Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp,
+            )
         }
     }
 }

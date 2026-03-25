@@ -1,6 +1,7 @@
 package com.example.tasksbot.ui
 
 import android.app.Application
+import android.content.Intent
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -23,6 +24,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         ChooseRoomCleaningType,
         ChooseLinenVariant,
         ChooseLinenColor,
+        ChooseFloor4BedsCount,
         ChooseVariant2Beds,
         QueueChangeCleaningType,
         Rooms,
@@ -34,6 +36,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         var linenProfile: String? = null, // "classic" | "floor4" | null
         var cleaningType: String? = null,
         var linenVariant: Int? = null,
+        var linenColor: String? = null,
     )
 
     data class UiState(
@@ -50,6 +53,8 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         val error: String? = null,
 
         val lastSentTotalArea: Double? = null,
+        /** "telegram" | "viber" — для текста на экране после отправки */
+        val lastSentChannel: String? = null,
     )
 
     val state = mutableStateOf(UiState())
@@ -75,6 +80,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             pendingAdd = null,
             editingQueueIndex = null,
             error = null,
+            lastSentChannel = null,
         )
     }
 
@@ -86,6 +92,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             pendingAdd = null,
             editingQueueIndex = null,
             error = null,
+            lastSentChannel = null,
         )
     }
 
@@ -216,6 +223,40 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         )
     }
 
+    fun setFloor4BedsCount(beds: Int) {
+        val pending = state.value.pendingAdd ?: return
+        val room = pending.room ?: return
+        val cleaningType = pending.cleaningType ?: "current"
+        val variant = pending.linenVariant ?: return
+        val colorKey = pending.linenColor ?: return
+
+        val added = QueueItem(
+            id = room.id,
+            name = room.name,
+            area = room.area,
+            cleaningType = cleaningType,
+            linenProfile = "floor4",
+            linenVariant = variant,
+            linenColor = colorKey,
+            linenBeds = beds.coerceIn(1, 4),
+        )
+        state.value = state.value.copy(
+            step = Step.Rooms,
+            selectedRooms = state.value.selectedRooms + added,
+            pendingAdd = null,
+            error = null,
+        )
+    }
+
+    fun cancelFloor4BedsToColor() {
+        val pending = state.value.pendingAdd ?: return
+        state.value = state.value.copy(
+            step = Step.ChooseLinenColor,
+            pendingAdd = pending.copy(linenColor = null),
+            error = null,
+        )
+    }
+
     fun cancelToLinenVariantFromColor() {
         val pending = state.value.pendingAdd ?: return
         state.value = state.value.copy(
@@ -341,6 +382,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                     pendingAdd = null,
                     editingQueueIndex = null,
                     error = null,
+                    lastSentChannel = "telegram",
                 )
             } catch (e: Exception) {
                 state.value = state.value.copy(
@@ -348,6 +390,71 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                     error = e.message ?: "Ошибка отправки",
                 )
             }
+        }
+    }
+
+    fun sendTaskViber() {
+        val current = state.value
+        if (current.selectedRooms.isEmpty()) {
+            state.value = current.copy(error = "Очередь пуста. Добавьте помещения.")
+            return
+        }
+
+        state.value = current.copy(isSending = true, error = null)
+        viewModelScope.launch {
+            try {
+                val total = queueTotalArea()
+                val text = tasksRepo.buildChannelMessage(
+                    employeeKey = current.currentEmployeeKey,
+                    queue = current.selectedRooms,
+                    totalArea = total,
+                    comment = current.comment,
+                )
+                tasksRepo.saveTaskLocal(
+                    employeeKey = current.currentEmployeeKey,
+                    queue = current.selectedRooms,
+                    totalArea = total,
+                    comment = current.comment,
+                )
+                openViberShare(text)
+                state.value = state.value.copy(
+                    isSending = false,
+                    step = Step.AfterSent,
+                    lastSentTotalArea = total,
+                    selectedRooms = emptyList(),
+                    comment = null,
+                    pendingAdd = null,
+                    editingQueueIndex = null,
+                    error = null,
+                    lastSentChannel = "viber",
+                )
+            } catch (e: Exception) {
+                state.value = state.value.copy(
+                    isSending = false,
+                    error = e.message ?: "Ошибка сохранения задания",
+                )
+            }
+        }
+    }
+
+    private fun openViberShare(text: String) {
+        val app = getApplication<Application>()
+        val viberIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+            setPackage("com.viber.voip")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val fallback = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val pm = app.packageManager
+        if (viberIntent.resolveActivity(pm) != null) {
+            app.startActivity(viberIntent)
+        } else {
+            app.startActivity(Intent.createChooser(fallback, "Отправить задание"))
         }
     }
 
@@ -361,6 +468,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             error = null,
             lastSentTotalArea = null,
             isSending = false,
+            lastSentChannel = null,
         )
     }
 }

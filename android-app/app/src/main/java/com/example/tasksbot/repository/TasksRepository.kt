@@ -15,7 +15,8 @@ class TasksRepository(
 
     data class SavedTask(
         val taskId: Int,
-        val messageId: Long,
+        /** null если отправка только в мессенджер с устройства (Viber и т.п.) */
+        val messageId: Long?,
     )
 
     data class TaskWithRooms(
@@ -45,6 +46,38 @@ class TasksRepository(
         val idLong = db.taskDao().insert(task)
         return SavedTask(taskId = idLong.toInt(), messageId = msgId)
     }
+
+    suspend fun saveTaskLocal(
+        employeeKey: String,
+        queue: List<QueueItem>,
+        totalArea: Double,
+        comment: String?,
+    ): SavedTask {
+        val createdAt = System.currentTimeMillis()
+        val roomsJson = gson.toJson(queue)
+        val task = TaskEntity(
+            createdAtEpochMillis = createdAt,
+            employeeKey = employeeKey,
+            roomsListJson = roomsJson,
+            totalArea = totalArea,
+            messageId = null,
+            comment = comment,
+        )
+        val idLong = db.taskDao().insert(task)
+        return SavedTask(taskId = idLong.toInt(), messageId = null)
+    }
+
+    fun buildChannelMessage(
+        employeeKey: String,
+        queue: List<QueueItem>,
+        totalArea: Double,
+        comment: String?,
+    ): String = com.example.tasksbot.domain.TaskLogic.formatChannelMessage(
+        employeeKey = employeeKey,
+        queue = queue,
+        totalArea = totalArea,
+        comment = comment,
+    )
 
     private fun buildMessage(
         employeeKey: String,
