@@ -1,16 +1,17 @@
 package com.example.tasksbot.ui
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -27,19 +28,21 @@ fun SetupScreen(
     val authVm: AuthViewModel = viewModel()
     val scope = rememberCoroutineScope()
 
-    var pin by remember { mutableStateOf("") }
-    var pin2 by remember { mutableStateOf("") }
-    var token by remember { mutableStateOf("") }
-    var channelId by remember { mutableStateOf("") }
-    var channelLink by remember { mutableStateOf("") }
-    var maxBotToken by remember { mutableStateOf("") }
-    var maxChatId by remember { mutableStateOf("") }
-    var vkAccessToken by remember { mutableStateOf("") }
-    var vkGroupId by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
+    var pin by rememberSaveable { mutableStateOf("") }
+    var pin2 by rememberSaveable { mutableStateOf("") }
+    var token by rememberSaveable { mutableStateOf("") }
+    var channelId by rememberSaveable { mutableStateOf("") }
+    var channelLink by rememberSaveable { mutableStateOf("") }
+    var maxBotToken by rememberSaveable { mutableStateOf("") }
+    var maxChatId by rememberSaveable { mutableStateOf("") }
+    var vkAccessToken by rememberSaveable { mutableStateOf("") }
+    var vkGroupId by rememberSaveable { mutableStateOf("") }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
 
     Column(
-        modifier = Modifier.padding(16.dp),
+        modifier = Modifier
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Первичная настройка (PIN + Telegram + MAX + VK)", modifier = Modifier.padding(bottom = 4.dp))
