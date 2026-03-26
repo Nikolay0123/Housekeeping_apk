@@ -1,0 +1,12 @@
+{
+  "name": "Задачи горничных",
+  "short_name": "Задания",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#E8F5F4",
+  "theme_color": "#0D7377",
+  "icons": [
+    { "src": "/static/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
+
