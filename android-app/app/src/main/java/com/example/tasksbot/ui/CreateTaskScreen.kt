@@ -266,10 +266,24 @@ private fun CreateTaskBody(
                     }
                 }
                 FilledTonalButton(
-                    onClick = { createVm.sendTaskViber() },
+                    onClick = {
+                        val token = authVm.maxBotToken.value ?: ""
+                        val chatId = authVm.maxChatId.value ?: ""
+                        createVm.sendTaskMax(token, chatId)
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !state.isSending,
-                ) { Text("Открыть Viber с текстом задания") }
+                ) { Text("Отправить в MAX (группа)") }
+
+                FilledTonalButton(
+                    onClick = {
+                        val accessToken = authVm.vkAccessToken.value ?: ""
+                        val groupId = authVm.vkGroupId.value ?: ""
+                        createVm.sendTaskVk(accessToken, groupId)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.isSending,
+                ) { Text("Отправить во ВКонтакте (стена)") }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
@@ -448,10 +462,8 @@ private fun CreateTaskBody(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 Text("Готово", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 when (state.lastSentChannel) {
-                    "viber" -> {
-                        Text("Задание для $empName сохранено в истории. Должен открыться Viber — выберите чат или контакт и отправьте текст.")
-                        Text("Если Viber не установлен, откроется список приложений для отправки.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    "max" -> Text("Задание для $empName отправлено в MAX (группа).")
+                    "vk" -> Text("Задание для $empName отправлено во ВКонтакте (стена группы).")
                     else -> Text("Задание для $empName отправлено в Telegram-канал.")
                 }
                 if (total0 != null) {

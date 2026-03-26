@@ -32,13 +32,17 @@ fun SetupScreen(
     var token by remember { mutableStateOf("") }
     var channelId by remember { mutableStateOf("") }
     var channelLink by remember { mutableStateOf("") }
+    var maxBotToken by remember { mutableStateOf("") }
+    var maxChatId by remember { mutableStateOf("") }
+    var vkAccessToken by remember { mutableStateOf("") }
+    var vkGroupId by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier.padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Первичная настройка (PIN + Telegram)", modifier = Modifier.padding(bottom = 4.dp))
+        Text("Первичная настройка (PIN + Telegram + MAX + VK)", modifier = Modifier.padding(bottom = 4.dp))
 
         OutlinedTextField(
             value = pin,
@@ -79,6 +83,36 @@ fun SetupScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
+        OutlinedTextField(
+            value = maxBotToken,
+            onValueChange = { maxBotToken = it },
+            label = { Text("MAX_BOT_TOKEN") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = maxChatId,
+            onValueChange = { maxChatId = it },
+            label = { Text("MAX_CHAT_ID (ID чата/группы)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        OutlinedTextField(
+            value = vkAccessToken,
+            onValueChange = { vkAccessToken = it },
+            label = { Text("VK_ACCESS_TOKEN") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = vkGroupId,
+            onValueChange = { vkGroupId = it },
+            label = { Text("VK_GROUP_ID (id группы, например 12345)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
         if (error != null) {
             Text(error ?: "", color = androidx.compose.material3.MaterialTheme.colorScheme.error)
         }
@@ -99,6 +133,14 @@ fun SetupScreen(
                     error = "Заполните BOT_TOKEN и CHANNEL_ID."
                     return@Button
                 }
+                if (maxBotToken.trim().isEmpty() || maxChatId.trim().isEmpty()) {
+                    error = "Заполните MAX_BOT_TOKEN и MAX_CHAT_ID."
+                    return@Button
+                }
+                if (vkAccessToken.trim().isEmpty() || vkGroupId.trim().isEmpty()) {
+                    error = "Заполните VK_ACCESS_TOKEN и VK_GROUP_ID."
+                    return@Button
+                }
 
                 scope.launch {
                     authVm.setup(
@@ -106,6 +148,10 @@ fun SetupScreen(
                         botToken = token.trim(),
                         channelId = channelId.trim(),
                         channelLink = channelLink.trim().ifEmpty { null },
+                        maxBotToken = maxBotToken.trim(),
+                        maxChatId = maxChatId.trim(),
+                        vkAccessToken = vkAccessToken.trim(),
+                        vkGroupId = vkGroupId.trim(),
                     )
                     onDone()
                 }

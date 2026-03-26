@@ -19,6 +19,10 @@ class AppSettingsRepository(private val context: Context) {
     private val KEY_BOT_TOKEN = stringPreferencesKey("botToken")
     private val KEY_CHANNEL_ID = stringPreferencesKey("channelId")
     private val KEY_CHANNEL_LINK = stringPreferencesKey("channelLink")
+    private val KEY_MAX_BOT_TOKEN = stringPreferencesKey("maxBotToken")
+    private val KEY_MAX_CHAT_ID = stringPreferencesKey("maxChatId")
+    private val KEY_VK_ACCESS_TOKEN = stringPreferencesKey("vkAccessToken")
+    private val KEY_VK_GROUP_ID = stringPreferencesKey("vkGroupId")
     private val KEY_SETUP_COMPLETE = booleanPreferencesKey("setupComplete")
 
     val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { prefs: Preferences ->
@@ -27,6 +31,10 @@ class AppSettingsRepository(private val context: Context) {
             botToken = prefs[KEY_BOT_TOKEN],
             channelId = prefs[KEY_CHANNEL_ID],
             channelLink = prefs[KEY_CHANNEL_LINK],
+            maxBotToken = prefs[KEY_MAX_BOT_TOKEN],
+            maxChatId = prefs[KEY_MAX_CHAT_ID],
+            vkAccessToken = prefs[KEY_VK_ACCESS_TOKEN],
+            vkGroupId = prefs[KEY_VK_GROUP_ID],
         )
     }
 
@@ -39,6 +47,10 @@ class AppSettingsRepository(private val context: Context) {
         botToken: String,
         channelId: String,
         channelLink: String?,
+        maxBotToken: String?,
+        maxChatId: String?,
+        vkAccessToken: String?,
+        vkGroupId: String?,
     ) {
         val pinHash = sha256Hex(pinRaw.trim())
         context.dataStore.edit { prefs ->
@@ -50,6 +62,10 @@ class AppSettingsRepository(private val context: Context) {
             } else {
                 prefs.remove(KEY_CHANNEL_LINK)
             }
+            if (!maxBotToken.isNullOrBlank()) prefs[KEY_MAX_BOT_TOKEN] = maxBotToken.trim() else prefs.remove(KEY_MAX_BOT_TOKEN)
+            if (!maxChatId.isNullOrBlank()) prefs[KEY_MAX_CHAT_ID] = maxChatId.trim() else prefs.remove(KEY_MAX_CHAT_ID)
+            if (!vkAccessToken.isNullOrBlank()) prefs[KEY_VK_ACCESS_TOKEN] = vkAccessToken.trim() else prefs.remove(KEY_VK_ACCESS_TOKEN)
+            if (!vkGroupId.isNullOrBlank()) prefs[KEY_VK_GROUP_ID] = vkGroupId.trim() else prefs.remove(KEY_VK_GROUP_ID)
             prefs[KEY_SETUP_COMPLETE] = true
         }
     }
@@ -60,6 +76,10 @@ class AppSettingsRepository(private val context: Context) {
             prefs.remove(KEY_BOT_TOKEN)
             prefs.remove(KEY_CHANNEL_ID)
             prefs.remove(KEY_CHANNEL_LINK)
+            prefs.remove(KEY_MAX_BOT_TOKEN)
+            prefs.remove(KEY_MAX_CHAT_ID)
+            prefs.remove(KEY_VK_ACCESS_TOKEN)
+            prefs.remove(KEY_VK_GROUP_ID)
             prefs[KEY_SETUP_COMPLETE] = false
         }
     }

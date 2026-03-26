@@ -1,7 +1,6 @@
 package com.example.tasksbot.ui
 
 import android.app.Application
-import android.content.Intent
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,6 +9,8 @@ import com.example.tasksbot.domain.TaskLogic
 import com.example.tasksbot.db.AppDatabase
 import com.example.tasksbot.db.RoomEntity
 import com.example.tasksbot.network.NetworkStatus
+import com.example.tasksbot.network.MaxClient
+import com.example.tasksbot.network.VkClient
 import com.example.tasksbot.repository.RoomsRepository
 import com.example.tasksbot.repository.TasksRepository
 import kotlinx.coroutines.launch
@@ -18,13 +19,14 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
     private val db = AppDatabase.getInstance(application)
     private val roomsRepo = RoomsRepository(db)
     private val tasksRepo = TasksRepository(db)
+    private val maxClient = MaxClient()
+    private val vkClient = VkClient()
 
     enum class Step {
         ChooseEmployee,
         ChooseRoomCleaningType,
         ChooseLinenVariant,
         ChooseLinenColor,
-        ChooseFloor4BedsCount,
         ChooseVariant2Beds,
         QueueChangeCleaningType,
         Rooms,
@@ -53,7 +55,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         val error: String? = null,
 
         val lastSentTotalArea: Double? = null,
-        /** "telegram" | "viber" — для текста на экране после отправки */
+        /** "telegram" | "max" | "vk" — для текста на экране после отправки */
         val lastSentChannel: String? = null,
     )
 
@@ -393,10 +395,21 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun sendTaskViber() {
+    fun sendTaskMax(maxBotToken: String, maxChatId: String) {
         val current = state.value
         if (current.selectedRooms.isEmpty()) {
             state.value = current.copy(error = "Очередь пуста. Добавьте помещения.")
+            return
+        }
+
+        if (maxBotToken.isBlank() || maxChatId.isBlank()) {
+            state.value = current.copy(error = "Не заданы MAX_BOT_TOKEN или MAX_CHAT_ID.")
+            return
+        }
+        if (!NetworkStatus.hasInternet(getApplication())) {
+            state.value = current.copy(
+                error = "Нет подключения к интернету. Включите Wi‑Fi или мобильные данные.",
+            )
             return
         }
 
@@ -410,13 +423,17 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                     totalArea = total,
                     comment = current.comment,
                 )
+                maxClient.sendMessage(
+                    botToken = maxBotToken,
+                    chatId = maxChatId,
+                    text = text,
+                )
                 tasksRepo.saveTaskLocal(
                     employeeKey = current.currentEmployeeKey,
                     queue = current.selectedRooms,
                     totalArea = total,
                     comment = current.comment,
                 )
-                openViberShare(text)
                 state.value = state.value.copy(
                     isSending = false,
                     step = Step.AfterSent,
@@ -426,35 +443,74 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                     pendingAdd = null,
                     editingQueueIndex = null,
                     error = null,
-                    lastSentChannel = "viber",
+                    lastSentChannel = "max",
                 )
             } catch (e: Exception) {
                 state.value = state.value.copy(
                     isSending = false,
-                    error = e.message ?: "Ошибка сохранения задания",
+                    error = e.message ?: "Ошибка отправки в MAX",
                 )
             }
         }
     }
 
-    private fun openViberShare(text: String) {
-        val app = getApplication<Application>()
-        val viberIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, text)
-            setPackage("com.viber.voip")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    fun sendTaskVk(vkAccessToken: String, vkGroupId: String) {
+        val current = state.value
+        if (current.selectedRooms.isEmpty()) {
+            state.value = current.copy(error = "Очередь пуста. Добавьте помещения.")
+            return
         }
-        val fallback = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, text)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        if (vkAccessToken.isBlank() || vkGroupId.isBlank()) {
+            state.value = current.copy(error = "Не заданы VK_ACCESS_TOKEN или VK_GROUP_ID.")
+            return
         }
-        val pm = app.packageManager
-        if (viberIntent.resolveActivity(pm) != null) {
-            app.startActivity(viberIntent)
-        } else {
-            app.startActivity(Intent.createChooser(fallback, "Отправить задание"))
+        if (!NetworkStatus.hasInternet(getApplication())) {
+            state.value = current.copy(
+                error = "Нет подключения к интернету. Включите Wi‑Fi или мобильные данные.",
+            )
+            return
+        }
+
+        state.value = current.copy(isSending = true, error = null)
+        viewModelScope.launch {
+            try {
+                val total = queueTotalArea()
+                val text = tasksRepo.buildChannelMessage(
+                    employeeKey = current.currentEmployeeKey,
+                    queue = current.selectedRooms,
+                    totalArea = total,
+                    comment = current.comment,
+                )
+                val ownerId = "-${vkGroupId.trim()}"
+                vkClient.postWall(
+                    accessToken = vkAccessToken,
+                    ownerId = ownerId,
+                    message = text,
+                )
+                tasksRepo.saveTaskLocal(
+                    employeeKey = current.currentEmployeeKey,
+                    queue = current.selectedRooms,
+                    totalArea = total,
+                    comment = current.comment,
+                )
+                state.value = state.value.copy(
+                    isSending = false,
+                    step = Step.AfterSent,
+                    lastSentTotalArea = total,
+                    selectedRooms = emptyList(),
+                    comment = null,
+                    pendingAdd = null,
+                    editingQueueIndex = null,
+                    error = null,
+                    lastSentChannel = "vk",
+                )
+            } catch (e: Exception) {
+                state.value = state.value.copy(
+                    isSending = false,
+                    error = e.message ?: "Ошибка отправки во ВКонтакте",
+                )
+            }
         }
     }
 

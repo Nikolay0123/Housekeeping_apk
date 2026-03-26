@@ -22,6 +22,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     val botToken = mutableStateOf<String?>(null)
     val channelId = mutableStateOf<String?>(null)
     val channelLink = mutableStateOf<String?>(null)
+    val maxBotToken = mutableStateOf<String?>(null)
+    val maxChatId = mutableStateOf<String?>(null)
+    val vkAccessToken = mutableStateOf<String?>(null)
+    val vkGroupId = mutableStateOf<String?>(null)
 
     init {
         viewModelScope.launch {
@@ -36,6 +40,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 botToken.value = settings.botToken
                 channelId.value = settings.channelId
                 channelLink.value = settings.channelLink
+                maxBotToken.value = settings.maxBotToken
+                maxChatId.value = settings.maxChatId
+                vkAccessToken.value = settings.vkAccessToken
+                vkGroupId.value = settings.vkGroupId
             }
         }
     }
@@ -51,12 +59,25 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         isUnlocked.value = false
     }
 
-    suspend fun setup(pinRaw: String, botToken: String, channelId: String, channelLink: String?) {
+    suspend fun setup(
+        pinRaw: String,
+        botToken: String,
+        channelId: String,
+        channelLink: String?,
+        maxBotToken: String?,
+        maxChatId: String?,
+        vkAccessToken: String?,
+        vkGroupId: String?,
+    ) {
         repo.setAll(
             pinRaw = pinRaw,
             botToken = botToken,
             channelId = channelId,
             channelLink = channelLink,
+            maxBotToken = maxBotToken,
+            maxChatId = maxChatId,
+            vkAccessToken = vkAccessToken,
+            vkGroupId = vkGroupId,
         )
         isUnlocked.value = true
     }
