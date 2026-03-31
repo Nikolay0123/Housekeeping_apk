@@ -285,8 +285,10 @@ class BnovoClient(
 
     companion object {
         private const val BASE_URL = "https://api.pms.bnovo.ru"
-        private const val BOOKINGS_PAGE_LIMIT = 500
-        private const val MAX_BOOKINGS_PAGES = 50
+        /** Bnovo API: максимум 50 записей на страницу (406 при большем значении). */
+        private const val BOOKINGS_PAGE_LIMIT = 50
+        /** Сверху ~25k сырых записей (50×500), как при старом лимите страниц. */
+        private const val MAX_BOOKINGS_PAGES = 500
         private val JSON = "application/json; charset=utf-8".toMediaType()
 
         private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
