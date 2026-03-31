@@ -173,6 +173,8 @@ object AutoTaskFromBnovo {
     /**
      * Логика вида уборки на дату [cleaningDate] (обычно «завтра»).
      * [departure] — дата выезда из брони; день выезда трактуется как день отъезда гостя (уборка «выезд» в этот день).
+     * Сегменты «Выехал» / «Отменен» и с `cancel_date` не учитываются, чтобы старые брони не перекрывали текущую.
+     * Выезд только при `departure == C` (не `C−1`: иначе вчерашний выезд ошибочно давал «выезд» на завтра).
      */
     internal fun cleaningTypeForRoom(
         roomName: String,
@@ -181,10 +183,11 @@ object AutoTaskFromBnovo {
     ): String? {
         val C = cleaningDate
         // Включая «нулевые» ночи, если заезд = выезд (бронь на день — у API бывает arrival == departure).
-        val bounded = bookings.filter { !it.arrival.isAfter(it.departure) }
+        val bounded = bookings.filter {
+            !it.arrival.isAfter(it.departure) && it.isActiveForOccupancy()
+        }
 
-        // Выезд «утром C»: в PMS часто date_departure = C, реже последняя ночь = C−1.
-        val leaving = bounded.filter { it.departure == C || it.departure == C.minusDays(1) }
+        val leaving = bounded.filter { it.departure == C }
         val arriving = bounded.filter { it.arrival == C }
         val staying = bounded.filter { it.arrival.isBefore(C) && it.departure.isAfter(C) }
 

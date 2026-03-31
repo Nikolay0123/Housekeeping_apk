@@ -16,6 +16,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /**
@@ -34,7 +35,29 @@ class BnovoClient(
         val roomLabel: String,
         val arrival: LocalDate,
         val departure: LocalDate,
-    )
+        /** Как в API: `status.name` (для отсечки «Выехал», «Отменен»). */
+        val statusName: String? = null,
+        /** `dates.cancel_date` задано — бронь не считаем для занятости. */
+        val hasCancelDate: Boolean = false,
+    ) {
+        /** Завершённые и отменённые сегменты не участвуют в расчёте уборки на дату. */
+        fun isActiveForOccupancy(): Boolean {
+            if (hasCancelDate) return false
+            val n = statusName?.trim()?.lowercase(Locale.getDefault()) ?: return true
+            return n !in TerminalOccupancyStatuses
+        }
+
+        companion object {
+            private val TerminalOccupancyStatuses = setOf(
+                "выехал",
+                "отменен",
+                "отменён",
+                "отменена",
+                "cancelled",
+                "canceled",
+            )
+        }
+    }
 
     suspend fun fetchAccessToken(accountId: String, apiKey: String): String = withContext(Dispatchers.IO) {
         val id = accountId.trim()
@@ -267,9 +290,19 @@ class BnovoClient(
             val o = el.asJsonObject
             val arrival = parseDateFromObject(o) ?: continue
             val departure = parseDepartureDate(o) ?: continue
+            val statusName = parseStatusName(o)
+            val hasCancelDate = parseHasCancelDate(o)
             val roomLabels = extractRoomLabels(o)
             for (label in roomLabels) {
-                out.add(NormalizedBooking(roomLabel = label, arrival = arrival, departure = departure))
+                out.add(
+                    NormalizedBooking(
+                        roomLabel = label,
+                        arrival = arrival,
+                        departure = departure,
+                        statusName = statusName,
+                        hasCancelDate = hasCancelDate,
+                    ),
+                )
             }
         }
         return out
@@ -322,6 +355,22 @@ class BnovoClient(
             }
         }
         return null
+    }
+
+    private fun parseStatusName(o: JsonObject): String? {
+        val st = o["status"]?.takeIf { it.isJsonObject }?.asJsonObject ?: return null
+        return st.getString("name")
+    }
+
+    private fun parseHasCancelDate(o: JsonObject): Boolean {
+        val dates = o["dates"]?.takeIf { it.isJsonObject }?.asJsonObject ?: return false
+        val cd = dates["cancel_date"] ?: return false
+        if (cd.isJsonNull) return false
+        val s = when {
+            cd.isJsonPrimitive && cd.asJsonPrimitive.isString -> cd.asString.trim()
+            else -> cd.toString().trim().trim('"')
+        }
+        return s.isNotEmpty()
     }
 
     private fun parseDepartureDate(o: JsonObject): LocalDate? {
