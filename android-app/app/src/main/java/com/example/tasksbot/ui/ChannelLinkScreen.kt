@@ -47,7 +47,8 @@ fun ChannelLinkScreen(
 
         Text("Bnovo PMS (автозадания)")
         Text(
-            "Укажите ID аккаунта и API-ключ из раздела Bnovo Octopus → API-доступ. Ключ хранится на устройстве.",
+            "Укажите ID аккаунта и API-ключ из раздела Bnovo Octopus → API-доступ (как в документации к API: «id» и «password»). " +
+                "ID — обычно число с экрана доступа, без пробелов; подключение доступно владельцу аккаунта. Ключ хранится на устройстве.",
             style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
             color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
         )

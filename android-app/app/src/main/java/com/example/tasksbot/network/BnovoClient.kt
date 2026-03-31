@@ -6,6 +6,7 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -31,26 +32,71 @@ class BnovoClient(
     )
 
     suspend fun fetchAccessToken(accountId: String, apiKey: String): String = withContext(Dispatchers.IO) {
-        val body = gson.toJson(
-            mapOf(
-                "id" to accountId.trim(),
-                "password" to apiKey.trim(),
-            ),
-        )
-        val request = Request.Builder()
-            .url("$BASE_URL/api/v1/auth")
-            .post(body.toRequestBody(JSON))
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json")
-            .build()
-        client.newCall(request).execute().use { resp ->
-            val text = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) {
-                throw BnovoApiException("Bnovo auth ${resp.code}: ${text.take(500)}")
-            }
-            extractAccessToken(text)
-                ?: throw BnovoApiException("В ответе Bnovo нет access_token. Фрагмент: ${text.take(400)}")
+        val id = accountId.trim()
+        val password = apiKey.trim()
+        if (id.isEmpty() || password.isEmpty()) {
+            throw BnovoApiException("Укажите ID аккаунта и API-ключ Bnovo.")
         }
+
+        val attempts = listOf(
+            buildAuthBodyIdPassword(id, password),
+            buildAuthBodyUsernamePassword(id, password),
+        ).distinct()
+
+        var lastCode = -1
+        var lastBody = ""
+
+        for (body in attempts) {
+            val request = Request.Builder()
+                .url("$BASE_URL/api/v1/auth")
+                .post(body.toRequestBody(JSON))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .build()
+            client.newCall(request).execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                lastCode = resp.code
+                lastBody = text
+                if (resp.isSuccessful) {
+                    extractAccessToken(text)?.let { return@withContext it }
+                    throw BnovoApiException("В ответе Bnovo нет access_token. Фрагмент: ${text.take(400)}")
+                }
+                if (resp.code != 404) {
+                    throw BnovoApiException(formatAuthError(resp.code, text))
+                }
+            }
+        }
+
+        throw BnovoApiException(formatAuthError(lastCode, lastBody))
+    }
+
+    /** Числовой ID из Octopus должен уходить в JSON как number, не как строка. */
+    private fun buildAuthBodyIdPassword(id: String, password: String): String {
+        val o = JsonObject()
+        when {
+            id.matches(Regex("\\d+")) -> o.addProperty("id", id.toLong())
+            else -> o.addProperty("id", id)
+        }
+        o.addProperty("password", password)
+        return gson.toJson(o)
+    }
+
+    private fun buildAuthBodyUsernamePassword(username: String, password: String): String {
+        val o = JsonObject()
+        o.addProperty("username", username)
+        o.addProperty("password", password)
+        return gson.toJson(o)
+    }
+
+    private fun formatAuthError(code: Int, text: String): String {
+        val snippet = text.trim().take(400)
+        val hint = if (code == 404 || snippet.contains("внешний пользователь", ignoreCase = true)) {
+            "\n\nПроверьте в Octopus → API-доступ: «ID аккаунта» (часто только цифры) и ключ без пробелов. " +
+                "Доступ обычно только у владельца аккаунта. При смене ключа введите новый ключ в приложении."
+        } else {
+            ""
+        }
+        return "Bnovo auth $code: $snippet$hint"
     }
 
     suspend fun fetchBookingsNormalized(
@@ -60,20 +106,42 @@ class BnovoClient(
     ): List<NormalizedBooking> = withContext(Dispatchers.IO) {
         val from = dateFrom.format(dateFmt)
         val to = dateTo.format(dateFmt)
-        val url = "$BASE_URL/api/v1/bookings?date_from=$from&date_to=$to"
-        val request = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer ${accessToken.trim()}")
-            .header("Accept", "application/json")
-            .get()
-            .build()
-        client.newCall(request).execute().use { resp ->
-            val text = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) {
-                throw BnovoApiException("Bnovo bookings ${resp.code}: ${text.take(500)}")
+        val all = ArrayList<NormalizedBooking>()
+        var offset = 0
+        var pages = 0
+        while (pages < MAX_BOOKINGS_PAGES) {
+            pages += 1
+            val url = "$BASE_URL/api/v1/bookings".toHttpUrl().newBuilder()
+                .addQueryParameter("date_from", from)
+                .addQueryParameter("date_to", to)
+                .addQueryParameter("limit", BOOKINGS_PAGE_LIMIT.toString())
+                .addQueryParameter("offset", offset.toString())
+                .build()
+            val request = Request.Builder()
+                .url(url)
+                .header("Authorization", "Bearer ${accessToken.trim()}")
+                .header("Accept", "application/json")
+                .get()
+                .build()
+            client.newCall(request).execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    throw BnovoApiException("Bnovo bookings ${resp.code}: ${text.take(500)}")
+                }
+                val pageCount = bookingsPageRawItemCount(text)
+                all.addAll(parseBookingsPayload(text))
+                if (pageCount < BOOKINGS_PAGE_LIMIT) return@withContext all
+                if (pageCount == 0) return@withContext all
+                offset += BOOKINGS_PAGE_LIMIT
             }
-            parseBookingsPayload(text)
         }
+        return@withContext all
+    }
+
+    /** Число элементов броней в «сыром» массиве страницы (для пагинации). */
+    private fun bookingsPageRawItemCount(json: String): Int {
+        val root = runCatching { gson.fromJson(json, JsonElement::class.java) }.getOrNull() ?: return 0
+        return extractArray(root)?.size() ?: 0
     }
 
     private fun extractAccessToken(json: String): String? {
@@ -217,6 +285,8 @@ class BnovoClient(
 
     companion object {
         private const val BASE_URL = "https://api.pms.bnovo.ru"
+        private const val BOOKINGS_PAGE_LIMIT = 500
+        private const val MAX_BOOKINGS_PAGES = 50
         private val JSON = "application/json; charset=utf-8".toMediaType()
 
         private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
