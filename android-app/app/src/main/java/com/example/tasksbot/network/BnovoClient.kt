@@ -30,12 +30,6 @@ class BnovoClient(
         val departure: LocalDate,
     )
 
-    private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
-        .build()
-
     suspend fun fetchAccessToken(accountId: String, apiKey: String): String = withContext(Dispatchers.IO) {
         val body = gson.toJson(
             mapOf(
@@ -224,6 +218,12 @@ class BnovoClient(
     companion object {
         private const val BASE_URL = "https://api.pms.bnovo.ru"
         private val JSON = "application/json; charset=utf-8".toMediaType()
+
+        private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
 
         /** "101", "Номер 101" → канон для сопоставления с базой приложения. */
         fun normalizeRoomLabel(raw: String): String? {
