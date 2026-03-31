@@ -100,13 +100,12 @@ class BnovoClient(
 
     /**
      * Диагностика: одна страница [fetchBookingsRawFirstPageSync] + текстовый разбор структуры для экрана настроек.
-     * Период: по `BOOKINGS_DATE_RADIUS_DAYS` дней назад и вперёд от сегодня.
+     * Период: `BOOKINGS_DATE_PAST_DAYS` / `BOOKINGS_DATE_FUTURE_DAYS` от сегодня.
      */
     suspend fun runBookingsDiagnostics(accountId: String, apiKey: String): String = withContext(Dispatchers.IO) {
         val token = fetchAccessToken(accountId, apiKey)
-        val radius = BOOKINGS_DATE_RADIUS_DAYS.toLong()
-        val from = LocalDate.now().minusDays(radius)
-        val to = LocalDate.now().plusDays(radius)
+        val from = LocalDate.now().minusDays(BOOKINGS_DATE_PAST_DAYS.toLong())
+        val to = LocalDate.now().plusDays(BOOKINGS_DATE_FUTURE_DAYS.toLong())
         val raw = fetchBookingsRawFirstPageSync(token, from, to)
         buildBookingsDiagnosticsReport(raw)
     }
@@ -482,10 +481,12 @@ class BnovoClient(
         /** Bnovo API: максимум 50 записей на страницу (406 при большем значении). */
         private const val BOOKINGS_PAGE_LIMIT = 50
         /**
-         * Полуширина окна `date_from`…`date_to` вокруг якоря: в UI задания якорь — дата уборки (обычно завтра),
-         * в [runBookingsDiagnostics] — сегодня. Было ±21 день в CreateTask и −14/+30 здесь и в скрипте.
+         * Окно GET /bookings. По наблюдениям, ответ может не включать брони с датой заезда раньше `date_from`
+         * (даже если гость ещё в номере). Тогда при «завтра» в середине лета и −120 суток нижняя граница
+         * оказывается ~20–23.03 — заезды 17.03 отпадают, 21.03 уже попадают. Глубокий отступ назад это лечит.
          */
-        const val BOOKINGS_DATE_RADIUS_DAYS = 60
+        const val BOOKINGS_DATE_PAST_DAYS = 365
+        const val BOOKINGS_DATE_FUTURE_DAYS = 60
         /** Сверху ~25k сырых записей (50×500), как при старом лимите страниц. */
         private const val MAX_BOOKINGS_PAGES = 500
         private val JSON = "application/json; charset=utf-8".toMediaType()

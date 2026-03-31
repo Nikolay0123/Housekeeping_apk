@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Сырой JSON от Bnovo Open API: POST /api/v1/auth → GET /api/v1/bookings (первая страница).
+Сырой JSON от Bnovo Open API: POST /api/v1/auth → GET /api/v1/bookings (все страницы, limit=50).
+
+Bnovo отдаёт не больше 50 записей за запрос; сортировка может отдавать «не те» 50 первыми
+(например, только заезды с 21.03, а 17.03 окажутся на следующей странице — без пагинации их не видно).
 
 Запуск в PyCharm:
   1. pip install -r requirements.txt  (или: pip install requests python-dotenv)
   2. Скопируйте scripts/.env.example → scripts/.env и укажите BNOVO_ACCOUNT_ID и BNOVO_API_KEY.
      Допустим также корневой .env репозитория (Housekeeping_apk/.env) с теми же именами.
-  3. Запустите скрипт. Результат: bnovo_bookings_page.json рядом со скриптом + краткий вывод в консоль.
-     Если .env нет — можно задать переменные в Run Configuration или ввести в консоли.
+  3. Результат: bnovo_bookings_full.json + .pretty.json рядом со скриптом.
 
 При отправке ответа кому-либо — удалите или замените персональные данные гостей.
 """
@@ -31,8 +33,10 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 BASE_URL = "https://api.pms.bnovo.ru"
 BOOKINGS_LIMIT = 50
-# Синхронно с BnovoClient.BOOKINGS_DATE_RADIUS_DAYS (Android): полуширина окна вокруг «сегодня».
-BOOKINGS_DATE_RADIUS_DAYS = 60
+MAX_BOOKINGS_PAGES = 500
+# Синхронно с BnovoClient (Android): назад шире — см. BOOKINGS_DATE_PAST_DAYS в приложении.
+BOOKINGS_DATE_PAST_DAYS = 365
+BOOKINGS_DATE_FUTURE_DAYS = 60
 
 
 def _extract_token(payload: dict) -> str | None:
@@ -108,6 +112,53 @@ def fetch_bookings_page(
     return r.status_code, r.text
 
 
+def _extract_bookings_list(payload: object) -> list:
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, dict):
+        return []
+    data = payload.get("data")
+    if isinstance(data, dict):
+        inner = data.get("bookings") or data.get("booking")
+        if isinstance(inner, list):
+            return inner
+        if isinstance(inner, dict) and isinstance(inner.get("data"), list):
+            return inner["data"]
+    for key in ("bookings", "items", "result"):
+        v = payload.get(key)
+        if isinstance(v, list):
+            return v
+    return []
+
+
+def fetch_all_bookings_pages(
+    token: str,
+    date_from: date,
+    date_to: date,
+) -> tuple[int, list, int]:
+    """Возвращает (код последнего HTTP, объединённый список броней, число страниц)."""
+    merged: list = []
+    offset = 0
+    pages = 0
+    last_code = 200
+    while pages < MAX_BOOKINGS_PAGES:
+        pages += 1
+        code, raw = fetch_bookings_page(token, date_from, date_to, BOOKINGS_LIMIT, offset)
+        last_code = code
+        if code != 200:
+            return code, merged, pages
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return code, merged, pages
+        chunk = _extract_bookings_list(parsed)
+        merged.extend(chunk)
+        if len(chunk) < BOOKINGS_LIMIT:
+            break
+        offset += BOOKINGS_LIMIT
+    return last_code, merged, pages
+
+
 def _load_dotenv() -> None:
     try:
         from dotenv import load_dotenv
@@ -139,32 +190,37 @@ def main() -> None:
     print("Токен получен.", flush=True)
 
     today = date.today()
-    date_from = today - timedelta(days=BOOKINGS_DATE_RADIUS_DAYS)
-    date_to = today + timedelta(days=BOOKINGS_DATE_RADIUS_DAYS)
+    date_from = today - timedelta(days=BOOKINGS_DATE_PAST_DAYS)
+    date_to = today + timedelta(days=BOOKINGS_DATE_FUTURE_DAYS)
 
     print(
-        f"Запрос GET /bookings: {date_from} … {date_to}, limit={BOOKINGS_LIMIT}, offset=0",
+        f"GET /bookings: {date_from} … {date_to}, limit={BOOKINGS_LIMIT}, все страницы (до {MAX_BOOKINGS_PAGES})",
         flush=True,
     )
-    code, raw = fetch_bookings_page(token, date_from, date_to)
-
-    out_path = Path(__file__).resolve().parent / "bnovo_bookings_page.json"
-    out_path.write_text(raw, encoding="utf-8")
-    print(f"HTTP {code}, тело сохранено: {out_path}", flush=True)
-
-    try:
-        data = json.loads(raw)
-        pretty = json.dumps(data, ensure_ascii=False, indent=2)
-        (out_path.with_suffix(".pretty.json")).write_text(pretty, encoding="utf-8")
-        print(f"Отформатировано: {out_path.with_suffix('.pretty.json')}", flush=True)
-        if isinstance(data, dict):
-            print("Ключи корня:", sorted(data.keys()), flush=True)
-    except json.JSONDecodeError:
-        print("Ответ не JSON, см. сырой файл.", flush=True)
+    code, bookings, n_pages = fetch_all_bookings_pages(token, date_from, date_to)
+    print(f"Страниц: {n_pages}, броней в объединении: {len(bookings)}", flush=True)
 
     if code != 200:
-        print(raw[:1200], file=sys.stderr)
+        print(
+            "Не удалось выгрузить (посмотрите первую ошибочную страницу отдельно).",
+            file=sys.stderr,
+        )
         sys.exit(1)
+
+    base_dir = Path(__file__).resolve().parent
+    merged_payload = {"data": {"bookings": bookings}}
+    compact_path = base_dir / "bnovo_bookings_full.json"
+    pretty_path = base_dir / "bnovo_bookings_full.pretty.json"
+    compact_path.write_text(
+        json.dumps(merged_payload, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    pretty_path.write_text(
+        json.dumps(merged_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(f"Сохранено: {compact_path}", flush=True)
+    print(f"Сохранено: {pretty_path}", flush=True)
 
 
 if __name__ == "__main__":
