@@ -1,5 +1,6 @@
 plugins {
-    id 'com.android.application' version '8.2.2' apply false
+    // Gradle 8.7 + AGP 8.4+ нужны для запуска сборки на JDK 21 (Gradle 8.2 поддерживает только до Java 19).
+    id 'com.android.application' version '8.4.2' apply false
     id 'org.jetbrains.kotlin.android' version '1.9.24' apply false
 }
 
