@@ -31,6 +31,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 BASE_URL = "https://api.pms.bnovo.ru"
 BOOKINGS_LIMIT = 50
+# Синхронно с BnovoClient.BOOKINGS_DATE_RADIUS_DAYS (Android): полуширина окна вокруг «сегодня».
+BOOKINGS_DATE_RADIUS_DAYS = 60
 
 
 def _extract_token(payload: dict) -> str | None:
@@ -137,8 +139,8 @@ def main() -> None:
     print("Токен получен.", flush=True)
 
     today = date.today()
-    date_from = today - timedelta(days=14)
-    date_to = today + timedelta(days=30)
+    date_from = today - timedelta(days=BOOKINGS_DATE_RADIUS_DAYS)
+    date_to = today + timedelta(days=BOOKINGS_DATE_RADIUS_DAYS)
 
     print(
         f"Запрос GET /bookings: {date_from} … {date_to}, limit={BOOKINGS_LIMIT}, offset=0",

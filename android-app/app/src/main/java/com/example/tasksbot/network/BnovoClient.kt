@@ -100,12 +100,13 @@ class BnovoClient(
 
     /**
      * Диагностика: одна страница [fetchBookingsRawFirstPageSync] + текстовый разбор структуры для экрана настроек.
-     * Период: 14 дней назад — 30 дней вперёд (можно увидеть поля без полной выгрузки).
+     * Период: по `BOOKINGS_DATE_RADIUS_DAYS` дней назад и вперёд от сегодня.
      */
     suspend fun runBookingsDiagnostics(accountId: String, apiKey: String): String = withContext(Dispatchers.IO) {
         val token = fetchAccessToken(accountId, apiKey)
-        val from = LocalDate.now().minusDays(14)
-        val to = LocalDate.now().plusDays(30)
+        val radius = BOOKINGS_DATE_RADIUS_DAYS.toLong()
+        val from = LocalDate.now().minusDays(radius)
+        val to = LocalDate.now().plusDays(radius)
         val raw = fetchBookingsRawFirstPageSync(token, from, to)
         buildBookingsDiagnosticsReport(raw)
     }
@@ -480,6 +481,11 @@ class BnovoClient(
         private const val BASE_URL = "https://api.pms.bnovo.ru"
         /** Bnovo API: максимум 50 записей на страницу (406 при большем значении). */
         private const val BOOKINGS_PAGE_LIMIT = 50
+        /**
+         * Полуширина окна `date_from`…`date_to` вокруг якоря: в UI задания якорь — дата уборки (обычно завтра),
+         * в [runBookingsDiagnostics] — сегодня. Было ±21 день в CreateTask и −14/+30 здесь и в скрипте.
+         */
+        const val BOOKINGS_DATE_RADIUS_DAYS = 60
         /** Сверху ~25k сырых записей (50×500), как при старом лимите страниц. */
         private const val MAX_BOOKINGS_PAGES = 500
         private val JSON = "application/json; charset=utf-8".toMediaType()

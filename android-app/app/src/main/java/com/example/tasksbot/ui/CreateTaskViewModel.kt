@@ -174,8 +174,9 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             try {
                 val cleaningDate = AutoTaskFromBnovo.tomorrowCleaningDate()
                 val token = bnovoClient.fetchAccessToken(trimmedId, trimmedKey)
-                val from = cleaningDate.minusDays(21)
-                val to = cleaningDate.plusDays(21)
+                val radius = BnovoClient.BOOKINGS_DATE_RADIUS_DAYS.toLong()
+                val from = cleaningDate.minusDays(radius)
+                val to = cleaningDate.plusDays(radius)
                 val raw = bnovoClient.fetchBookingsNormalized(token, from, to)
                 val byRoom = AutoTaskFromBnovo.indexBookingsByRoom(raw)
                 val active = roomsRepo.getActiveRooms()
