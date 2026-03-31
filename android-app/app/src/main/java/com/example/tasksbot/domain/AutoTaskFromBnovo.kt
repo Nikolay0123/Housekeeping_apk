@@ -180,9 +180,11 @@ object AutoTaskFromBnovo {
         cleaningDate: LocalDate,
     ): String? {
         val C = cleaningDate
-        val bounded = bookings.filter { it.arrival.isBefore(it.departure) }
+        // Включая «нулевые» ночи, если заезд = выезд (бронь на день — у API бывает arrival == departure).
+        val bounded = bookings.filter { !it.arrival.isAfter(it.departure) }
 
-        val leaving = bounded.filter { it.departure == C }
+        // Выезд «утром C»: в PMS часто date_departure = C, реже последняя ночь = C−1.
+        val leaving = bounded.filter { it.departure == C || it.departure == C.minusDays(1) }
         val arriving = bounded.filter { it.arrival == C }
         val staying = bounded.filter { it.arrival.isBefore(C) && it.departure.isAfter(C) }
 

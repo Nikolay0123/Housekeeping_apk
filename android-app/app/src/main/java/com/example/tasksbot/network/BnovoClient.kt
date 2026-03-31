@@ -13,6 +13,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -23,7 +24,9 @@ class BnovoClient(
     private val client: OkHttpClient = defaultClient(),
 ) {
     private val gson = Gson()
-    private val dateFmt = DateTimeFormatter.ISO_LOCAL_DATE
+    private val dateFmtIso = DateTimeFormatter.ISO_LOCAL_DATE
+    private val dateFmtRu = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+    private val dateFmtSlash = DateTimeFormatter.ofPattern("dd/MM/yyyy")
 
     data class NormalizedBooking(
         val roomLabel: String,
@@ -104,8 +107,8 @@ class BnovoClient(
         dateFrom: LocalDate,
         dateTo: LocalDate,
     ): List<NormalizedBooking> = withContext(Dispatchers.IO) {
-        val from = dateFrom.format(dateFmt)
-        val to = dateTo.format(dateFmt)
+        val from = dateFrom.format(dateFmtIso)
+        val to = dateTo.format(dateFmtIso)
         val all = ArrayList<NormalizedBooking>()
         var offset = 0
         var pages = 0
@@ -245,19 +248,46 @@ class BnovoClient(
         }
         if (s.isEmpty()) return null
         val dayPart = s.take(10)
-        return runCatching { LocalDate.parse(dayPart, dateFmt) }.getOrNull()
+        parseDateString(dayPart)?.let { return it }
+        if (s.length >= 10) parseDateString(s.substring(0, 10))?.let { return it }
+        return parseDateString(s)
+    }
+
+    private fun parseDateString(s: String): LocalDate? {
+        val t = s.trim()
+        if (t.length < 8) return null
+        for (fmt in listOf(dateFmtIso, dateFmtRu, dateFmtSlash)) {
+            try {
+                return LocalDate.parse(t.take(10), fmt)
+            } catch (_: DateTimeParseException) {
+                continue
+            }
+        }
+        return null
     }
 
     private fun extractRoomLabels(o: JsonObject): List<String> {
         val labels = LinkedHashSet<String>()
-        val directKeys = listOf("room_name", "room_number", "roomNumber", "apartment", "room_title")
+        val directKeys = listOf(
+            "room_name",
+            "room_number",
+            "roomNumber",
+            "apartment",
+            "room_title",
+            "flat",
+            "flat_number",
+            "room_flat",
+            "category_room",
+            "placement",
+            "placement_name",
+        )
         for (k in directKeys) {
             o.getString(k)?.let { normalizeRoomLabel(it)?.let { l -> labels.add(l) } }
         }
         val room = o["room"]
         if (room != null && room.isJsonObject) {
             val ro = room.asJsonObject
-            for (k in listOf("name", "title", "number", "room_number", "id")) {
+            for (k in listOf("name", "title", "number", "room_number", "id", "short_name", "code")) {
                 val raw = ro.get(k) ?: continue
                 if (raw.isJsonPrimitive && raw.asJsonPrimitive.isString) {
                     normalizeRoomLabel(raw.asString)?.let { labels.add(it) }
@@ -297,13 +327,24 @@ class BnovoClient(
             .writeTimeout(60, TimeUnit.SECONDS)
             .build()
 
-        /** "101", "Номер 101" → канон для сопоставления с базой приложения. */
+        /** "101", "Номер 101", "№101", "Стандарт 101" → канон как в [SeedData] («Номер 101»). */
         fun normalizeRoomLabel(raw: String): String? {
-            val t = raw.trim()
+            val t = raw.trim().replace("\u00A0", " ")
             if (t.startsWith("id:")) return t
-            val digits = Regex("(\\d{3,4}(?:\\.\\d+)?)").find(t)?.groupValues?.getOrNull(1)
-            if (digits != null) return "Номер $digits"
-            val n = t.removePrefix("Номер").trim()
+            val collapsed = t.replace("\\s+".toRegex(), " ")
+            val digitStr = Regex("(\\d{3,4}(?:\\.\\d+)?)").find(collapsed)?.groupValues?.getOrNull(1)
+            if (digitStr != null) return "Номер $digitStr"
+            val n = collapsed
+                .removePrefix("Номер")
+                .trim()
+                .removePrefix("номер")
+                .trim()
+                .removePrefix("№")
+                .trim()
+                .removePrefix("No.")
+                .trim()
+                .removePrefix("no.")
+                .trim()
             if (n.all { it.isDigit() } && n.length in 3..4) return "Номер $n"
             return null
         }
