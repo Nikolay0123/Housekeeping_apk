@@ -1,11 +1,13 @@
 package com.example.tasksbot.repository
 
 import com.example.tasksbot.domain.QueueItem
+import com.example.tasksbot.domain.TaskLogic
 import com.example.tasksbot.db.AppDatabase
 import com.example.tasksbot.db.TaskEntity
 import com.example.tasksbot.network.TelegramClient
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import java.time.LocalDate
 
 class TasksRepository(
     private val db: AppDatabase,
@@ -31,10 +33,15 @@ class TasksRepository(
         queue: List<QueueItem>,
         totalArea: Double,
         comment: String?,
+        taskForDate: LocalDate? = null,
     ): SavedTask {
         val createdAt = System.currentTimeMillis()
         val roomsJson = gson.toJson(queue)
-        val msgId = telegramClient.sendMessage(botToken, channelId, text = buildMessage(employeeKey, queue, totalArea, comment))
+        val msgId = telegramClient.sendMessage(
+            botToken,
+            channelId,
+            text = buildMessage(employeeKey, queue, totalArea, comment, taskForDate),
+        )
         val task = TaskEntity(
             createdAtEpochMillis = createdAt,
             employeeKey = employeeKey,
@@ -72,11 +79,13 @@ class TasksRepository(
         queue: List<QueueItem>,
         totalArea: Double,
         comment: String?,
-    ): String = com.example.tasksbot.domain.TaskLogic.formatChannelMessage(
+        taskForDate: LocalDate? = null,
+    ): String = TaskLogic.formatChannelMessage(
         employeeKey = employeeKey,
         queue = queue,
         totalArea = totalArea,
         comment = comment,
+        taskForDate = taskForDate,
     )
 
     private fun buildMessage(
@@ -84,13 +93,14 @@ class TasksRepository(
         queue: List<QueueItem>,
         totalArea: Double,
         comment: String?,
+        taskForDate: LocalDate? = null,
     ): String {
-        // Вынесено внутрь репозитория, чтобы не гонять форматтер по UI.
-        return com.example.tasksbot.domain.TaskLogic.formatChannelMessage(
+        return TaskLogic.formatChannelMessage(
             employeeKey = employeeKey,
             queue = queue,
             totalArea = totalArea,
             comment = comment,
+            taskForDate = taskForDate,
         )
     }
 

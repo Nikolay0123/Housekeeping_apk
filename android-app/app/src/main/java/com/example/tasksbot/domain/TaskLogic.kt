@@ -178,6 +178,37 @@ object TaskLogic {
             "Полотенце для лица" to 2,
             "Полотенце для ног" to 1,
         ),
+        /** Номер 109 — кровати соединены (автозадание Bnovo). */
+        5 to mapOf(
+            "Простыня люкс" to 1,
+            "Пододеяльник двуспальный" to 1,
+            "Наволочка" to 2,
+            "Полотенце банное с вышивкой" to 2,
+            "Полотенце для лица" to 2,
+            "Полотенце для ног" to 1,
+            "Халат вафельный" to 1,
+        ),
+        /** Номер 109 — разъединены; масштаб как у варианта 2 при linenBeds. */
+        6 to mapOf(
+            "Простыня 1,5 спальная" to 2,
+            "Пододеяльник 1,5 спальный" to 2,
+            "Наволочка" to 2,
+            "Полотенце банное с вышивкой" to 2,
+            "Полотенце для лица" to 2,
+            "Полотенце для ног" to 1,
+            "Халат вафельный" to 1,
+        ),
+    )
+
+    /** Номер 108: фиксированный люкс-комплект с махровым халатом (linenVariant = 3). */
+    val LINEN_PACKAGE_108: Map<String, Int> = mapOf(
+        "Простыня люкс" to 1,
+        "Пододеяльник люкс" to 1,
+        "Наволочка с люкс (с вышивкой)" to 4,
+        "Полотенце банное с вышивкой" to 2,
+        "Полотенце для лица" to 2,
+        "Полотенце для ног" to 1,
+        "Халат махровый" to 1,
     )
 
     // Комплекты белья для номеров 401–405 (4 этаж): варианты 1/2/3 — множитель 2/3/4 на каждую позицию
@@ -205,9 +236,39 @@ object TaskLogic {
         ),
     )
 
+    fun isRoom108(roomName: String): Boolean = roomName.trim() == "Номер 108"
+
+    fun isRoom109(roomName: String): Boolean = roomName.trim() == "Номер 109"
+
     fun classicLinenQuantities(item: QueueItem): LinkedHashMap<String, Int>? {
-        val v = item.linenVariant
-        if (v == null || v !in LINEN_PACKAGES) return null
+        val v = item.linenVariant ?: return null
+
+        if (isRoom108(item.name) && v == 3) {
+            return LinkedHashMap(LINEN_PACKAGE_108)
+        }
+
+        if (v == 5) {
+            return LinkedHashMap(LINEN_PACKAGES[5] ?: return null)
+        }
+
+        if (v == 6) {
+            val base = LINEN_PACKAGES[6] ?: return null
+            val bedsRaw = item.linenBeds ?: 2
+            val beds = if (bedsRaw in listOf(1, 2)) bedsRaw else 2
+            if (beds == 1) {
+                val scaled = LinkedHashMap<String, Int>()
+                for ((k, q) in base) {
+                    scaled[k] =
+                        if (k == LINEN_FOOT_TOWEL && q > 0) max(1, q / 2)
+                        else if (k == "Халат вафельный" && q > 0) max(1, q)
+                        else max(0, q / 2)
+                }
+                return scaled
+            }
+            return LinkedHashMap(base)
+        }
+
+        if (v !in LINEN_PACKAGES) return null
         val base = LINEN_PACKAGES[v] ?: return null
 
         if (v == 2) {
@@ -274,6 +335,8 @@ object TaskLogic {
         2 -> "Вариант 2 — две 1,5-спальные"
         3 -> "Вариант 3 — люкс (4 наволочки)"
         4 -> "Вариант 4 — люкс + двуспальный пододеяльник"
+        5 -> "Номер 109 — соединённые кровати"
+        6 -> "Номер 109 — разъединённые кровати"
         else -> "Вариант $variant"
     }
 
@@ -290,7 +353,7 @@ object TaskLogic {
         val v = item.linenVariant ?: return emptyList()
         val lines = mutableListOf<String>()
         when {
-            profile == "classic" && v in LINEN_PACKAGES -> {
+            profile == "classic" && (v in LINEN_PACKAGES || (isRoom108(item.name) && v == 3)) -> {
                 val pkg = classicLinenQuantities(item) ?: return emptyList()
                 lines += "🧺 Бельё (${classicLinenVariantButtonTitle(v)}):"
                 lines += formatLinenPackageLines(pkg)
@@ -311,6 +374,8 @@ object TaskLogic {
         queue: List<QueueItem>,
         totalArea: Double,
         comment: String?,
+        /** Если задано (например автозадание Bnovo) — дата уборки «завтра». */
+        taskForDate: LocalDate? = null,
     ): String {
         val empName = formatEmployeeName(employeeKey)
         val limit = AREA_LIMIT
@@ -318,6 +383,7 @@ object TaskLogic {
 
         val now = LocalDateTime.now()
         val dateStr = now.format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
+        val taskDateStr = taskForDate?.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
 
         val lines = mutableListOf<String>()
         lines += listOf(
@@ -325,6 +391,12 @@ object TaskLogic {
             "━━━━━━━━━━━━━━━━━━━━━",
             "",
             "👤 Исполнитель: $empName",
+        )
+        if (!taskDateStr.isNullOrBlank()) {
+            lines += ""
+            lines += "📅 Дата уборки: $taskDateStr"
+        }
+        lines += listOf(
             "",
             "ПОРЯДОК УБОРКИ:",
         )
@@ -355,7 +427,7 @@ object TaskLogic {
             var bedConfig = ""
             if (r.linenVariant != null) {
                 val variant = r.linenVariant!!
-                if (profile == "classic" && variant in LINEN_PACKAGES) {
+                if (profile == "classic" && (variant in LINEN_PACKAGES || (isRoom108(r.name) && variant == 3))) {
                     bedConfig = when (variant) {
                         1 -> " — кровати соединены"
                         2 -> {
@@ -364,6 +436,15 @@ object TaskLogic {
                                 " — кровати разъединены, застелить 1 кровать"
                             } else {
                                 " — кровати разъединены, застелить 2 кровати"
+                            }
+                        }
+                        5 -> " — кровати соединены (109)"
+                        6 -> {
+                            val bk = classicVariant2BedsLabel(r.linenBeds)
+                            if (bk == 1) {
+                                " — кровати разъединены (109), застелить 1 кровать"
+                            } else {
+                                " — кровати разъединены (109), застелить 2 кровати"
                             }
                         }
                         else -> ""
@@ -395,7 +476,7 @@ object TaskLogic {
                         val sumQty = pkg.values.sum()
                         linenColorTotals[label] = (linenColorTotals[label] ?: 0) + sumQty
                     }
-                } else if (profile == "classic" && variant in LINEN_PACKAGES) {
+                } else if (profile == "classic" && (variant in LINEN_PACKAGES || (isRoom108(r.name) && variant == 3))) {
                     val pkg = classicLinenQuantities(r)
                     if (pkg != null) {
                         for ((itemName, qty) in pkg) addLinenItem(itemName, qty)
@@ -484,6 +565,11 @@ object TaskLogic {
             } else if (profile == "classic" && r.linenVariant == 2) {
                 val bk = classicVariant2BedsLabel(r.linenBeds)
                 extra = ", вар.2 — ${bk} кров."
+            } else if (profile == "classic" && r.linenVariant == 6) {
+                val bk = classicVariant2BedsLabel(r.linenBeds)
+                extra = ", 109 разд. — ${bk} кров."
+            } else if (profile == "classic" && r.linenVariant == 5) {
+                extra = ", 109 соед."
             }
 
             val area0 = round(r.area).toInt()

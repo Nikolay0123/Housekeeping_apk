@@ -4,16 +4,19 @@ import android.app.Application
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.tasksbot.domain.AutoTaskFromBnovo
 import com.example.tasksbot.domain.QueueItem
 import com.example.tasksbot.domain.TaskLogic
 import com.example.tasksbot.db.AppDatabase
 import com.example.tasksbot.db.RoomEntity
+import com.example.tasksbot.network.BnovoClient
 import com.example.tasksbot.network.NetworkStatus
 import com.example.tasksbot.network.MaxClient
 import com.example.tasksbot.network.VkClient
 import com.example.tasksbot.repository.RoomsRepository
 import com.example.tasksbot.repository.TasksRepository
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 class CreateTaskViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getInstance(application)
@@ -21,6 +24,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
     private val tasksRepo = TasksRepository(db)
     private val maxClient = MaxClient()
     private val vkClient = VkClient()
+    private val bnovoClient = BnovoClient()
 
     enum class Step {
         ChooseEmployee,
@@ -29,9 +33,14 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         ChooseLinenColor,
         ChooseVariant2Beds,
         QueueChangeCleaningType,
+        BnovoChooseFloor,
+        BnovoLoading,
+        BnovoBedWizard,
         Rooms,
         AfterSent,
     }
+
+    data class BnovoBedChoice(val joined: Boolean, val splitBeds: Int = 2)
 
     data class PendingAdd(
         var room: RoomEntity? = null,
@@ -57,6 +66,14 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         val lastSentTotalArea: Double? = null,
         /** "telegram" | "max" | "vk" — для текста на экране после отправки */
         val lastSentChannel: String? = null,
+
+        val bnovoCleaningDate: LocalDate? = null,
+        val bnovoPlanned: List<AutoTaskFromBnovo.PlannedRoom>? = null,
+        val bnovoBedSteps: List<AutoTaskFromBnovo.PlannedRoom> = emptyList(),
+        val bnovoBedStepIndex: Int = 0,
+        val bnovoBedChoices: Map<String, BnovoBedChoice> = emptyMap(),
+        /** Дата уборки в тексте канала (автозадание на «завтра»). */
+        val taskForChannelDate: LocalDate? = null,
     )
 
     val state = mutableStateOf(UiState())
@@ -83,6 +100,12 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             editingQueueIndex = null,
             error = null,
             lastSentChannel = null,
+            bnovoCleaningDate = null,
+            bnovoPlanned = null,
+            bnovoBedSteps = emptyList(),
+            bnovoBedStepIndex = 0,
+            bnovoBedChoices = emptyMap(),
+            taskForChannelDate = null,
         )
     }
 
@@ -95,11 +118,142 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             editingQueueIndex = null,
             error = null,
             lastSentChannel = null,
+            bnovoCleaningDate = null,
+            bnovoPlanned = null,
+            bnovoBedSteps = emptyList(),
+            bnovoBedStepIndex = 0,
+            bnovoBedChoices = emptyMap(),
+            taskForChannelDate = null,
         )
     }
 
     fun clearQueue() {
-        state.value = state.value.copy(selectedRooms = emptyList(), error = null)
+        state.value = state.value.copy(selectedRooms = emptyList(), error = null, taskForChannelDate = null)
+    }
+
+    fun startBnovoWizard() {
+        state.value = state.value.copy(
+            step = Step.BnovoChooseFloor,
+            error = null,
+            bnovoCleaningDate = null,
+            bnovoPlanned = null,
+            bnovoBedSteps = emptyList(),
+            bnovoBedStepIndex = 0,
+            bnovoBedChoices = emptyMap(),
+        )
+    }
+
+    fun cancelBnovoWizard() {
+        state.value = state.value.copy(
+            step = Step.Rooms,
+            isSending = false,
+            bnovoCleaningDate = null,
+            bnovoPlanned = null,
+            bnovoBedSteps = emptyList(),
+            bnovoBedStepIndex = 0,
+            bnovoBedChoices = emptyMap(),
+        )
+    }
+
+    fun loadBnovoAndPlan(accountId: String, apiKey: String, _floor: AutoTaskFromBnovo.FloorChoice) {
+        val trimmedId = accountId.trim()
+        val trimmedKey = apiKey.trim()
+        if (trimmedId.isEmpty() || trimmedKey.isEmpty()) {
+            state.value = state.value.copy(error = "Настройте Bnovo: меню → Ссылка на канал.")
+            return
+        }
+        if (!NetworkStatus.hasInternet(getApplication())) {
+            state.value = state.value.copy(
+                error = "Нет подключения к интернету. Включите Wi‑Fi или мобильные данные.",
+            )
+            return
+        }
+
+        state.value = state.value.copy(step = Step.BnovoLoading, isSending = true, error = null)
+        viewModelScope.launch {
+            try {
+                val cleaningDate = AutoTaskFromBnovo.tomorrowCleaningDate()
+                val token = bnovoClient.fetchAccessToken(trimmedId, trimmedKey)
+                val from = cleaningDate.minusDays(21)
+                val to = cleaningDate.plusDays(21)
+                val raw = bnovoClient.fetchBookingsNormalized(token, from, to)
+                val byRoom = AutoTaskFromBnovo.indexBookingsByRoom(raw)
+                val active = roomsRepo.getActiveRooms()
+                val byName = active.associateBy { it.name }
+                val planned = AutoTaskFromBnovo.planFirstFloor(byName, byRoom, cleaningDate)
+                if (planned.isEmpty()) {
+                    state.value = state.value.copy(
+                        step = Step.Rooms,
+                        isSending = false,
+                        error = "По данным Bnovo на завтра нет задач по номерам 101–109. Проверьте API и названия номеров.",
+                    )
+                    return@launch
+                }
+                val bedSteps = planned.filter { it.needsBedChoice }
+                if (bedSteps.isEmpty()) {
+                    applyBnovoPlanned(planned, emptyMap(), cleaningDate)
+                } else {
+                    state.value = state.value.copy(
+                        step = Step.BnovoBedWizard,
+                        isSending = false,
+                        bnovoCleaningDate = cleaningDate,
+                        bnovoPlanned = planned,
+                        bnovoBedSteps = bedSteps,
+                        bnovoBedStepIndex = 0,
+                        bnovoBedChoices = emptyMap(),
+                        taskForChannelDate = cleaningDate,
+                    )
+                }
+            } catch (e: Exception) {
+                state.value = state.value.copy(
+                    step = Step.Rooms,
+                    isSending = false,
+                    error = e.message ?: "Ошибка запроса к Bnovo",
+                )
+            }
+        }
+    }
+
+    fun recordBnovoBedChoice(joined: Boolean, splitBeds: Int) {
+        val s = state.value
+        val steps = s.bnovoBedSteps
+        val idx = s.bnovoBedStepIndex
+        if (idx !in steps.indices || s.bnovoPlanned == null) return
+        val roomName = steps[idx].entity.name
+        val choice = BnovoBedChoice(joined = joined, splitBeds = splitBeds.coerceIn(1, 2))
+        val map = s.bnovoBedChoices + (roomName to choice)
+        if (idx + 1 >= steps.size) {
+            applyBnovoPlanned(s.bnovoPlanned!!, map, s.bnovoCleaningDate ?: AutoTaskFromBnovo.tomorrowCleaningDate())
+        } else {
+            state.value = s.copy(bnovoBedChoices = map, bnovoBedStepIndex = idx + 1)
+        }
+    }
+
+    private fun applyBnovoPlanned(
+        planned: List<AutoTaskFromBnovo.PlannedRoom>,
+        choices: Map<String, BnovoBedChoice>,
+        cleaningDate: LocalDate,
+    ) {
+        val queue = planned.map { p ->
+            val c = choices[p.entity.name]
+            AutoTaskFromBnovo.plannedToQueueItem(
+                planned = p,
+                bedsJoined = c?.joined ?: true,
+                splitBeds = c?.splitBeds ?: 2,
+            )
+        }
+        state.value = state.value.copy(
+            step = Step.Rooms,
+            selectedRooms = queue,
+            isSending = false,
+            error = null,
+            bnovoCleaningDate = null,
+            bnovoPlanned = null,
+            bnovoBedSteps = emptyList(),
+            bnovoBedStepIndex = 0,
+            bnovoBedChoices = emptyMap(),
+            taskForChannelDate = cleaningDate,
+        )
     }
 
     fun setComment(comment: String?) {
@@ -374,6 +528,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                     queue = current.selectedRooms,
                     totalArea = total,
                     comment = current.comment,
+                    taskForDate = current.taskForChannelDate,
                 )
                 state.value = state.value.copy(
                     isSending = false,
@@ -385,6 +540,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                     editingQueueIndex = null,
                     error = null,
                     lastSentChannel = "telegram",
+                    taskForChannelDate = null,
                 )
             } catch (e: Exception) {
                 state.value = state.value.copy(
@@ -422,6 +578,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                     queue = current.selectedRooms,
                     totalArea = total,
                     comment = current.comment,
+                    taskForDate = current.taskForChannelDate,
                 )
                 maxClient.sendMessage(
                     botToken = maxBotToken,
@@ -444,6 +601,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                     editingQueueIndex = null,
                     error = null,
                     lastSentChannel = "max",
+                    taskForChannelDate = null,
                 )
             } catch (e: Exception) {
                 state.value = state.value.copy(
@@ -481,6 +639,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                     queue = current.selectedRooms,
                     totalArea = total,
                     comment = current.comment,
+                    taskForDate = current.taskForChannelDate,
                 )
                 val ownerId = "-${vkGroupId.trim()}"
                 vkClient.postWall(
@@ -504,6 +663,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                     editingQueueIndex = null,
                     error = null,
                     lastSentChannel = "vk",
+                    taskForChannelDate = null,
                 )
             } catch (e: Exception) {
                 state.value = state.value.copy(
@@ -525,6 +685,12 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             lastSentTotalArea = null,
             isSending = false,
             lastSentChannel = null,
+            bnovoCleaningDate = null,
+            bnovoPlanned = null,
+            bnovoBedSteps = emptyList(),
+            bnovoBedStepIndex = 0,
+            bnovoBedChoices = emptyMap(),
+            taskForChannelDate = null,
         )
     }
 }

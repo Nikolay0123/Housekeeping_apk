@@ -23,6 +23,8 @@ class AppSettingsRepository(private val context: Context) {
     private val KEY_MAX_CHAT_ID = stringPreferencesKey("maxChatId")
     private val KEY_VK_ACCESS_TOKEN = stringPreferencesKey("vkAccessToken")
     private val KEY_VK_GROUP_ID = stringPreferencesKey("vkGroupId")
+    private val KEY_BNOVO_ACCOUNT_ID = stringPreferencesKey("bnovoAccountId")
+    private val KEY_BNOVO_API_KEY = stringPreferencesKey("bnovoApiKey")
     private val KEY_SETUP_COMPLETE = booleanPreferencesKey("setupComplete")
 
     val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { prefs: Preferences ->
@@ -35,6 +37,8 @@ class AppSettingsRepository(private val context: Context) {
             maxChatId = prefs[KEY_MAX_CHAT_ID],
             vkAccessToken = prefs[KEY_VK_ACCESS_TOKEN],
             vkGroupId = prefs[KEY_VK_GROUP_ID],
+            bnovoAccountId = prefs[KEY_BNOVO_ACCOUNT_ID],
+            bnovoApiKey = prefs[KEY_BNOVO_API_KEY],
         )
     }
 
@@ -70,6 +74,15 @@ class AppSettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun setBnovoCredentials(accountId: String?, apiKey: String?) {
+        context.dataStore.edit { prefs ->
+            if (!accountId.isNullOrBlank()) prefs[KEY_BNOVO_ACCOUNT_ID] = accountId.trim()
+            else prefs.remove(KEY_BNOVO_ACCOUNT_ID)
+            if (!apiKey.isNullOrBlank()) prefs[KEY_BNOVO_API_KEY] = apiKey.trim()
+            else prefs.remove(KEY_BNOVO_API_KEY)
+        }
+    }
+
     suspend fun clearAll() {
         context.dataStore.edit { prefs ->
             prefs.remove(KEY_PIN_HASH)
@@ -80,6 +93,8 @@ class AppSettingsRepository(private val context: Context) {
             prefs.remove(KEY_MAX_CHAT_ID)
             prefs.remove(KEY_VK_ACCESS_TOKEN)
             prefs.remove(KEY_VK_GROUP_ID)
+            prefs.remove(KEY_BNOVO_ACCOUNT_ID)
+            prefs.remove(KEY_BNOVO_API_KEY)
             prefs[KEY_SETUP_COMPLETE] = false
         }
     }

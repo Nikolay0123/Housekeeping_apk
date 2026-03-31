@@ -26,6 +26,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     val maxChatId = mutableStateOf<String?>(null)
     val vkAccessToken = mutableStateOf<String?>(null)
     val vkGroupId = mutableStateOf<String?>(null)
+    val bnovoAccountId = mutableStateOf<String?>(null)
+    val bnovoApiKey = mutableStateOf<String?>(null)
 
     init {
         viewModelScope.launch {
@@ -44,6 +46,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 maxChatId.value = settings.maxChatId
                 vkAccessToken.value = settings.vkAccessToken
                 vkGroupId.value = settings.vkGroupId
+                bnovoAccountId.value = settings.bnovoAccountId
+                bnovoApiKey.value = settings.bnovoApiKey
             }
         }
     }
@@ -80,6 +84,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             vkGroupId = vkGroupId,
         )
         isUnlocked.value = true
+    }
+
+    suspend fun saveBnovoCredentials(accountId: String?, apiKey: String?) {
+        repo.setBnovoCredentials(accountId, apiKey)
     }
 
     suspend fun reset() {

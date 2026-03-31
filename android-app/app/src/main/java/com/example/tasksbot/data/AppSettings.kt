@@ -9,5 +9,9 @@ data class AppSettings(
     val maxChatId: String? = null,
     val vkAccessToken: String? = null,
     val vkGroupId: String? = null,
+    /** ID аккаунта Bnovo PMS (логин API). */
+    val bnovoAccountId: String? = null,
+    /** API-ключ / пароль Open API Bnovo. */
+    val bnovoApiKey: String? = null,
 )
 

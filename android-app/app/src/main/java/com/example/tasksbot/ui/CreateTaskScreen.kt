@@ -37,9 +37,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.tasksbot.domain.AutoTaskFromBnovo
 import com.example.tasksbot.domain.QueueItem
 import com.example.tasksbot.domain.TaskLogic
 import com.example.tasksbot.db.RoomEntity
+import java.time.format.DateTimeFormatter
 import kotlin.math.round
 
 @Composable
@@ -146,6 +148,7 @@ private fun CreateTaskBody(
         CreateTaskViewModel.Step.Rooms -> {
             val totalArea = state.selectedRooms.sumOf { it.area }
             val selectedIds = state.selectedRooms.map { it.id }.toSet()
+            val taskDateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy")
             var roomTab by remember { mutableStateOf(TaskLogic.RoomPickerTab.Floor1) }
             val tabRows = TaskLogic.RoomPickerTab.entries
             val tabLabel: (TaskLogic.RoomPickerTab) -> String = {
@@ -171,8 +174,21 @@ private fun CreateTaskBody(
                             "Площадь: ${TaskLogic.formatArea(totalArea)} / ${TaskLogic.formatArea(TaskLogic.AREA_LIMIT)} м²",
                             style = MaterialTheme.typography.bodyMedium,
                         )
+                        state.taskForChannelDate?.let { d ->
+                            Text(
+                                "Дата уборки (из Bnovo): ${d.format(taskDateFmt)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
+
+                FilledTonalButton(
+                    onClick = { createVm.startBnovoWizard() },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.isSending,
+                ) { Text("Сформировать на завтра (Bnovo)") }
 
                 Text("Очередь уборки", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
                 if (state.selectedRooms.isEmpty()) {
@@ -433,6 +449,87 @@ private fun CreateTaskBody(
             }
         }
 
+        CreateTaskViewModel.Step.BnovoChooseFloor -> {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "Автозадание на завтра",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    "Выберите этаж. Сейчас доступно формирование списка для 1-го этажа (101–109, кабинеты, «1 этаж», кухня) по данным Bnovo.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = {
+                        val id = authVm.bnovoAccountId.value.orEmpty()
+                        val key = authVm.bnovoApiKey.value.orEmpty()
+                        createVm.loadBnovoAndPlan(id, key, AutoTaskFromBnovo.FloorChoice.First)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("1 этаж — загрузить брони") }
+                TextButton(onClick = { createVm.cancelBnovoWizard() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Отмена")
+                }
+                state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        }
+
+        CreateTaskViewModel.Step.BnovoLoading -> {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Запрос к Bnovo…", style = MaterialTheme.typography.titleMedium)
+                CircularProgressIndicator(modifier = Modifier.height(36.dp))
+            }
+        }
+
+        CreateTaskViewModel.Step.BnovoBedWizard -> {
+            val steps = state.bnovoBedSteps
+            val idx = state.bnovoBedStepIndex
+            val cur = steps.getOrNull(idx)
+            if (cur == null) {
+                Text("Нет данных по кроватям.")
+                return
+            }
+            val n = steps.size
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "Расположение кроватей",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    "Шаг ${idx + 1} из $n: ${cur.entity.name}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    "Выберите вариант для комплекта белья.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = { createVm.recordBnovoBedChoice(joined = true, splitBeds = 2) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Соединены") }
+                Button(
+                    onClick = { createVm.recordBnovoBedChoice(joined = false, splitBeds = 2) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Разъединены — 2 кровати") }
+                Button(
+                    onClick = { createVm.recordBnovoBedChoice(joined = false, splitBeds = 1) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Разъединены — 1 кровать") }
+                TextButton(onClick = { createVm.cancelBnovoWizard() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Отмена")
+                }
+            }
+        }
+
         CreateTaskViewModel.Step.QueueChangeCleaningType -> {
             val idx = state.editingQueueIndex
             if (idx == null || idx !in state.selectedRooms.indices) {
@@ -536,6 +633,11 @@ private fun QueueRow(
         profile == "classic" && item.linenVariant == 2 -> {
             val bk = TaskLogic.classicVariant2BedsLabel(item.linenBeds)
             " (вар.2, $bk кров.)"
+        }
+        profile == "classic" && item.linenVariant == 5 -> " (109 соед.)"
+        profile == "classic" && item.linenVariant == 6 -> {
+            val bk = TaskLogic.classicVariant2BedsLabel(item.linenBeds)
+            " (109 разд., $bk кров.)"
         }
         else -> ""
     }
