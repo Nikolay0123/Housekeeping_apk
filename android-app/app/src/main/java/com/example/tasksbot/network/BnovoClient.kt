@@ -1,9 +1,11 @@
 package com.example.tasksbot.network
 
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -71,6 +73,102 @@ class BnovoClient(
         }
 
         throw BnovoApiException(formatAuthError(lastCode, lastBody))
+    }
+
+    /**
+     * Диагностика: одна страница [fetchBookingsRawFirstPageSync] + текстовый разбор структуры для экрана настроек.
+     * Период: 14 дней назад — 30 дней вперёд (можно увидеть поля без полной выгрузки).
+     */
+    suspend fun runBookingsDiagnostics(accountId: String, apiKey: String): String = withContext(Dispatchers.IO) {
+        val token = fetchAccessToken(accountId, apiKey)
+        val from = LocalDate.now().minusDays(14)
+        val to = LocalDate.now().plusDays(30)
+        val raw = fetchBookingsRawFirstPageSync(token, from, to)
+        buildBookingsDiagnosticsReport(raw)
+    }
+
+    private fun fetchBookingsRawFirstPageSync(accessToken: String, dateFrom: LocalDate, dateTo: LocalDate): String {
+        val from = dateFrom.format(dateFmtIso)
+        val to = dateTo.format(dateFmtIso)
+        val url = "$BASE_URL/api/v1/bookings".toHttpUrl().newBuilder()
+            .addQueryParameter("date_from", from)
+            .addQueryParameter("date_to", to)
+            .addQueryParameter("limit", BOOKINGS_PAGE_LIMIT.toString())
+            .addQueryParameter("offset", "0")
+            .build()
+        val request = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer ${accessToken.trim()}")
+            .header("Accept", "application/json")
+            .get()
+            .build()
+        client.newCall(request).execute().use { resp ->
+            val text = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) {
+                throw BnovoApiException("Bnovo bookings ${resp.code}: ${text.take(800)}")
+            }
+            return text
+        }
+    }
+
+    /** Удобно для логов/отладки: красивый JSON и список ключей первой брони. */
+    fun buildBookingsDiagnosticsReport(rawJson: String): String {
+        val sb = StringBuilder()
+        sb.appendLine("Bnovo GET /api/v1/bookings (первая страница, limit=$BOOKINGS_PAGE_LIMIT)")
+        sb.appendLine()
+        sb.appendLine("Размер тела: ${rawJson.length} символов")
+        val root = runCatching { JsonParser.parseString(rawJson) }.getOrNull()
+        if (root == null) {
+            sb.appendLine("Не удалось распарсить JSON. Начало ответа:")
+            sb.appendLine(rawJson.take(2500))
+            return sb.toString()
+        }
+        if (root.isJsonObject) {
+            sb.appendLine("Ключи корневого объекта:")
+            root.asJsonObject.keySet().sorted().forEach { sb.appendLine("  • $it") }
+            sb.appendLine()
+        }
+        val arr = extractArray(root)
+        val n = arr?.size() ?: 0
+        sb.appendLine("Элементов в массиве броней на странице: $n")
+        sb.appendLine()
+        if (arr != null && n > 0 && arr[0].isJsonObject) {
+            val first = arr[0].asJsonObject
+            sb.appendLine("Ключи первой брони (тип / превью значения):")
+            appendJsonObjectKeySummary(sb, first, indent = "  ")
+            sb.appendLine()
+            val room = first["room"]
+            if (room != null && room.isJsonObject) {
+                sb.appendLine("Ключи вложенного room:")
+                appendJsonObjectKeySummary(sb, room.asJsonObject, indent = "  ")
+                sb.appendLine()
+            }
+        }
+        sb.appendLine("— JSON с переносами (обрезка ~20 000 симв., без персональных данных не копируйте в открытый доступ) —")
+        val pretty = GsonBuilder().setPrettyPrinting().serializeNulls().create().toJson(root)
+        val cap = 20_000
+        sb.append(pretty.take(cap))
+        if (pretty.length > cap) {
+            sb.appendLine()
+            sb.appendLine("… ответ обрезан. Полный объём: ${pretty.length} символов.")
+        }
+        return sb.toString()
+    }
+
+    private fun appendJsonObjectKeySummary(sb: StringBuilder, o: JsonObject, indent: String) {
+        for (k in o.keySet().sorted()) {
+            val v = o[k] ?: continue
+            val hint = when {
+                v.isJsonObject -> "{ объект, ${v.asJsonObject.keySet().size} ключей }"
+                v.isJsonArray -> "[ массив, ${v.asJsonArray.size()} элем. ]"
+                v.isJsonNull -> "null"
+                else -> {
+                    val p = v.asJsonPrimitive.toString()
+                    if (p.length > 72) p.take(72) + "…" else p
+                }
+            }
+            sb.appendLine("$indent$k → $hint")
+        }
     }
 
     /** Числовой ID из Octopus должен уходить в JSON как number, не как строка. */
