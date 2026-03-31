@@ -34,8 +34,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 BASE_URL = "https://api.pms.bnovo.ru"
 BOOKINGS_LIMIT = 50
 MAX_BOOKINGS_PAGES = 500
-# Синхронно с BnovoClient (Android): назад шире — см. BOOKINGS_DATE_PAST_DAYS в приложении.
-BOOKINGS_DATE_PAST_DAYS = 365
+# Синхронно с BnovoClient.BOOKINGS_DATE_PAST_DAYS; при необходимости увеличьте (см. KDoc в приложении).
+BOOKINGS_DATE_PAST_DAYS = 120
 BOOKINGS_DATE_FUTURE_DAYS = 60
 
 
