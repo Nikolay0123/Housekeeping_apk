@@ -283,14 +283,24 @@ class BnovoClient(
             val el = o[key] ?: return@forEach
             if (el.isJsonArray) return el.asJsonArray
             if (el.isJsonObject) {
-                val inner = el.asJsonObject["booking"] ?: el.asJsonObject["data"]
-                if (inner != null && inner.isJsonArray) return inner.asJsonArray
+                val jo = el.asJsonObject
+                // Bnovo: { "data": { "bookings": [ ... ] } }
+                val innerBookings = jo["bookings"] ?: jo["booking"] ?: jo["data"]
+                if (innerBookings != null && innerBookings.isJsonArray) {
+                    return innerBookings.asJsonArray
+                }
             }
         }
         return null
     }
 
     private fun parseDateFromObject(o: JsonObject): LocalDate? {
+        val dates = o["dates"]?.takeIf { it.isJsonObject }?.asJsonObject
+        if (dates != null) {
+            for (k in listOf("arrival", "real_arrival", "original_arrival")) {
+                parseDate(dates.get(k))?.let { return it }
+            }
+        }
         val keys = listOf(
             "date_arrival",
             "date_arrival_hotel",
@@ -315,6 +325,12 @@ class BnovoClient(
     }
 
     private fun parseDepartureDate(o: JsonObject): LocalDate? {
+        val dates = o["dates"]?.takeIf { it.isJsonObject }?.asJsonObject
+        if (dates != null) {
+            for (k in listOf("departure", "real_departure", "original_departure")) {
+                parseDate(dates.get(k))?.let { return it }
+            }
+        }
         val keys = listOf(
             "date_departure",
             "date_departure_hotel",
