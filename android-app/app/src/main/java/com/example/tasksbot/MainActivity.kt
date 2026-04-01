@@ -1,9 +1,17 @@
 package com.example.tasksbot
 
-import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -25,6 +33,7 @@ import com.example.tasksbot.ui.theme.TasksBotTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
             AppRoot()
@@ -59,34 +68,48 @@ private fun AppRoot() {
     }
 
     TasksBotTheme {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            when (section) {
-                Section.Setup -> SetupScreen(
-                    onDone = { section = Section.Login }
-                )
-                Section.Login -> LoginScreen(
-                    onLoggedIn = { section = Section.MainMenu },
-                    onGoToSetup = { section = Section.Setup }
-                )
-                Section.MainMenu -> MainMenuScreen(
-                    onCreateTask = { section = Section.CreateTask },
-                    onHistory = { section = Section.History },
-                    onRooms = { section = Section.RoomManagement },
-                    onChannelLink = { section = Section.ChannelLink },
-                )
-                Section.CreateTask -> CreateTaskScreen(
-                    onBackToMenu = { section = Section.MainMenu },
-                    onGoToHistory = { section = Section.History },
-                )
-                Section.History -> HistoryScreen(
-                    onBackToMenu = { section = Section.MainMenu }
-                )
-                Section.RoomManagement -> RoomManagementScreen(
-                    onBackToMenu = { section = Section.MainMenu }
-                )
-                Section.ChannelLink -> ChannelLinkScreen(
-                    onBackToMenu = { section = Section.MainMenu }
-                )
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars),
+            color = MaterialTheme.colorScheme.background,
+        ) {
+            AnimatedContent(
+                targetState = section,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(240, delayMillis = 40)) togetherWith
+                        fadeOut(animationSpec = tween(180))
+                },
+                label = "section",
+            ) { sec ->
+                when (sec) {
+                    Section.Setup -> SetupScreen(
+                        onDone = { section = Section.Login }
+                    )
+                    Section.Login -> LoginScreen(
+                        onLoggedIn = { section = Section.MainMenu },
+                        onGoToSetup = { section = Section.Setup }
+                    )
+                    Section.MainMenu -> MainMenuScreen(
+                        onCreateTask = { section = Section.CreateTask },
+                        onHistory = { section = Section.History },
+                        onRooms = { section = Section.RoomManagement },
+                        onChannelLink = { section = Section.ChannelLink },
+                    )
+                    Section.CreateTask -> CreateTaskScreen(
+                        onBackToMenu = { section = Section.MainMenu },
+                        onGoToHistory = { section = Section.History },
+                    )
+                    Section.History -> HistoryScreen(
+                        onBackToMenu = { section = Section.MainMenu }
+                    )
+                    Section.RoomManagement -> RoomManagementScreen(
+                        onBackToMenu = { section = Section.MainMenu }
+                    )
+                    Section.ChannelLink -> ChannelLinkScreen(
+                        onBackToMenu = { section = Section.MainMenu }
+                    )
+                }
             }
         }
     }

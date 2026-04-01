@@ -2,16 +2,25 @@ package com.example.tasksbot.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AddTask
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.HomeWork
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.tasksbot.ui.components.MainMenuHero
+import com.example.tasksbot.ui.components.MenuDestinationCard
 
 @Composable
 fun MainMenuScreen(
@@ -20,26 +29,51 @@ fun MainMenuScreen(
     onRooms: () -> Unit,
     onChannelLink: () -> Unit,
 ) {
+    val scroll = rememberScrollState()
     Column(
-        modifier = Modifier.padding(20.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scroll)
+            .padding(horizontal = 20.dp, vertical = 28.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        MainMenuHero()
         Text(
-            "Задачи горничных",
-            style = MaterialTheme.typography.headlineSmall,
+            text = "Задачи горничных",
+            style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.onBackground,
         )
         Text(
-            "Выберите раздел",
-            style = MaterialTheme.typography.bodyMedium,
+            text = "Разделы",
+            style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Spacer(modifier = Modifier.height(4.dp))
 
-        Button(onClick = onCreateTask, modifier = Modifier.fillMaxWidth()) { Text("Создать задание") }
-        FilledTonalButton(onClick = onHistory, modifier = Modifier.fillMaxWidth()) { Text("История") }
-        FilledTonalButton(onClick = onRooms, modifier = Modifier.fillMaxWidth()) { Text("Помещения") }
-        FilledTonalButton(onClick = onChannelLink, modifier = Modifier.fillMaxWidth()) { Text("Ссылка на канал") }
+        MenuDestinationCard(
+            icon = Icons.Outlined.AddTask,
+            title = "Создать задание",
+            subtitle = "Очередь уборки, автозадание из Bnovo",
+            onClick = onCreateTask,
+        )
+        MenuDestinationCard(
+            icon = Icons.Outlined.History,
+            title = "История",
+            subtitle = "Отправленные задания по датам",
+            onClick = onHistory,
+        )
+        MenuDestinationCard(
+            icon = Icons.Outlined.HomeWork,
+            title = "Помещения",
+            subtitle = "Площади и включение в список выбора",
+            onClick = onRooms,
+        )
+        MenuDestinationCard(
+            icon = Icons.Outlined.Link,
+            title = "Ссылка на канал",
+            subtitle = "Telegram, MAX, VK и интеграция Bnovo",
+            onClick = onChannelLink,
+        )
     }
 }
-

@@ -32,6 +32,8 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         ChooseLinenVariant,
         ChooseLinenColor,
         ChooseVariant2Beds,
+        ChooseFloor4Layout,
+        ChooseFloor4Beds,
         QueueChangeCleaningType,
         BnovoChooseFloor,
         BnovoLoading,
@@ -42,12 +44,16 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
 
     data class BnovoBedChoice(val joined: Boolean, val splitBeds: Int = 2)
 
+    data class PerBedChoice(val color: String, val beds: Int)
+
     data class PendingAdd(
         var room: RoomEntity? = null,
         var linenProfile: String? = null, // "classic" | "floor4" | null
         var cleaningType: String? = null,
         var linenVariant: Int? = null,
         var linenColor: String? = null,
+        /** Для 4 этажа (ручное): сколько кроватей максимум выводить в мастере. */
+        var floor4MaxBeds: Int = 4,
     )
 
     data class UiState(
@@ -69,9 +75,11 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
 
         val bnovoCleaningDate: LocalDate? = null,
         val bnovoPlanned: List<AutoTaskFromBnovo.PlannedRoom>? = null,
-        val bnovoBedSteps: List<AutoTaskFromBnovo.PlannedRoom> = emptyList(),
-        val bnovoBedStepIndex: Int = 0,
-        val bnovoBedChoices: Map<String, BnovoBedChoice> = emptyMap(),
+        val bnovoWizardSteps: List<AutoTaskFromBnovo.BnovoWizardStep> = emptyList(),
+        val bnovoWizardIndex: Int = 0,
+        val bnovoLayoutChoices: Map<String, BnovoBedChoice> = emptyMap(),
+        val bnovoPerBedChoices: Map<String, PerBedChoice> = emptyMap(),
+        val bnovoPerBedColorDraft: String? = null,
         /** Дата уборки в тексте канала (автозадание на «завтра»). */
         val taskForChannelDate: LocalDate? = null,
     )
@@ -102,9 +110,11 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             lastSentChannel = null,
             bnovoCleaningDate = null,
             bnovoPlanned = null,
-            bnovoBedSteps = emptyList(),
-            bnovoBedStepIndex = 0,
-            bnovoBedChoices = emptyMap(),
+            bnovoWizardSteps = emptyList(),
+            bnovoWizardIndex = 0,
+            bnovoLayoutChoices = emptyMap(),
+            bnovoPerBedChoices = emptyMap(),
+            bnovoPerBedColorDraft = null,
             taskForChannelDate = null,
         )
     }
@@ -120,9 +130,11 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             lastSentChannel = null,
             bnovoCleaningDate = null,
             bnovoPlanned = null,
-            bnovoBedSteps = emptyList(),
-            bnovoBedStepIndex = 0,
-            bnovoBedChoices = emptyMap(),
+            bnovoWizardSteps = emptyList(),
+            bnovoWizardIndex = 0,
+            bnovoLayoutChoices = emptyMap(),
+            bnovoPerBedChoices = emptyMap(),
+            bnovoPerBedColorDraft = null,
             taskForChannelDate = null,
         )
     }
@@ -137,9 +149,11 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             error = null,
             bnovoCleaningDate = null,
             bnovoPlanned = null,
-            bnovoBedSteps = emptyList(),
-            bnovoBedStepIndex = 0,
-            bnovoBedChoices = emptyMap(),
+            bnovoWizardSteps = emptyList(),
+            bnovoWizardIndex = 0,
+            bnovoLayoutChoices = emptyMap(),
+            bnovoPerBedChoices = emptyMap(),
+            bnovoPerBedColorDraft = null,
         )
     }
 
@@ -149,13 +163,15 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             isSending = false,
             bnovoCleaningDate = null,
             bnovoPlanned = null,
-            bnovoBedSteps = emptyList(),
-            bnovoBedStepIndex = 0,
-            bnovoBedChoices = emptyMap(),
+            bnovoWizardSteps = emptyList(),
+            bnovoWizardIndex = 0,
+            bnovoLayoutChoices = emptyMap(),
+            bnovoPerBedChoices = emptyMap(),
+            bnovoPerBedColorDraft = null,
         )
     }
 
-    fun loadBnovoAndPlan(accountId: String, apiKey: String, _floor: AutoTaskFromBnovo.FloorChoice) {
+    fun loadBnovoAndPlan(accountId: String, apiKey: String, floor: AutoTaskFromBnovo.FloorChoice) {
         val trimmedId = accountId.trim()
         val trimmedKey = apiKey.trim()
         if (trimmedId.isEmpty() || trimmedKey.isEmpty()) {
@@ -180,27 +196,37 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                 val byRoom = AutoTaskFromBnovo.indexBookingsByRoom(raw)
                 val active = roomsRepo.getActiveRooms()
                 val byName = active.associateBy { it.name }
-                val planned = AutoTaskFromBnovo.planFirstFloor(byName, byRoom, cleaningDate)
+                val planned = when (floor) {
+                    AutoTaskFromBnovo.FloorChoice.First -> AutoTaskFromBnovo.planFirstFloor(byName, byRoom, cleaningDate)
+                    AutoTaskFromBnovo.FloorChoice.Fourth -> AutoTaskFromBnovo.planFourthFloor(byName, byRoom, cleaningDate)
+                }
                 if (planned.isEmpty()) {
                     state.value = state.value.copy(
                         step = Step.Rooms,
                         isSending = false,
-                        error = "По данным Bnovo на завтра нет задач по номерам 101–109. Проверьте API и названия номеров.",
+                        error = AutoTaskFromBnovo.emptyPlanMessageForFloor(floor),
                     )
                     return@launch
                 }
-                val bedSteps = planned.filter { it.needsBedChoice }
-                if (bedSteps.isEmpty()) {
-                    applyBnovoPlanned(planned, emptyMap(), cleaningDate)
+                val wizardSteps = AutoTaskFromBnovo.buildBnovoWizardSteps(planned)
+                if (wizardSteps.isEmpty()) {
+                    applyBnovoPlanned(
+                        planned,
+                        emptyMap(),
+                        emptyMap(),
+                        cleaningDate,
+                    )
                 } else {
                     state.value = state.value.copy(
                         step = Step.BnovoBedWizard,
                         isSending = false,
                         bnovoCleaningDate = cleaningDate,
                         bnovoPlanned = planned,
-                        bnovoBedSteps = bedSteps,
-                        bnovoBedStepIndex = 0,
-                        bnovoBedChoices = emptyMap(),
+                        bnovoWizardSteps = wizardSteps,
+                        bnovoWizardIndex = 0,
+                        bnovoLayoutChoices = emptyMap(),
+                        bnovoPerBedChoices = emptyMap(),
+                        bnovoPerBedColorDraft = null,
                         taskForChannelDate = cleaningDate,
                     )
                 }
@@ -214,32 +240,82 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun recordBnovoBedChoice(joined: Boolean, splitBeds: Int) {
+    fun recordBnovoLayoutChoice(joined: Boolean, splitBedsForClassic: Int) {
         val s = state.value
-        val steps = s.bnovoBedSteps
-        val idx = s.bnovoBedStepIndex
+        val steps = s.bnovoWizardSteps
+        val idx = s.bnovoWizardIndex
         if (idx !in steps.indices || s.bnovoPlanned == null) return
-        val roomName = steps[idx].entity.name
-        val choice = BnovoBedChoice(joined = joined, splitBeds = splitBeds.coerceIn(1, 2))
-        val map = s.bnovoBedChoices + (roomName to choice)
-        if (idx + 1 >= steps.size) {
-            applyBnovoPlanned(s.bnovoPlanned!!, map, s.bnovoCleaningDate ?: AutoTaskFromBnovo.tomorrowCleaningDate())
+        when (val step = steps[idx]) {
+            is AutoTaskFromBnovo.BnovoWizardStep.ClassicBeds -> {
+                val name = step.planned.entity.name
+                val choice = BnovoBedChoice(joined = joined, splitBeds = splitBedsForClassic.coerceIn(1, 2))
+                advanceAfterBnovoLayout(s.copy(bnovoLayoutChoices = s.bnovoLayoutChoices + (name to choice)))
+            }
+            is AutoTaskFromBnovo.BnovoWizardStep.Floor4Layout -> {
+                val name = step.planned.entity.name
+                val choice = BnovoBedChoice(joined = joined, splitBeds = 2)
+                advanceAfterBnovoLayout(s.copy(bnovoLayoutChoices = s.bnovoLayoutChoices + (name to choice)))
+            }
+            else -> {}
+        }
+    }
+
+    fun recordBnovoPerBedColor(colorKey: String) {
+        if (colorKey !in TaskLogic.LINEN_COLOR_ORDER_FLOOR4_PER_BED) return
+        state.value = state.value.copy(bnovoPerBedColorDraft = colorKey)
+    }
+
+    fun recordBnovoPerBedBedsCount(beds: Int) {
+        val s = state.value
+        val step = s.bnovoWizardSteps.getOrNull(s.bnovoWizardIndex)
+        if (step !is AutoTaskFromBnovo.BnovoWizardStep.Floor4PerBed || s.bnovoPlanned == null) return
+        val color = s.bnovoPerBedColorDraft ?: return
+        val maxB = step.maxBeds.coerceIn(1, 20)
+        val b = beds.coerceIn(1, maxB)
+        val name = step.planned.entity.name
+        advanceAfterBnovoLayout(
+            s.copy(
+                bnovoPerBedChoices = s.bnovoPerBedChoices + (name to PerBedChoice(color, b)),
+                bnovoPerBedColorDraft = null,
+            ),
+        )
+    }
+
+    fun cancelBnovoPerBedColorDraft() {
+        state.value = state.value.copy(bnovoPerBedColorDraft = null)
+    }
+
+    private fun advanceAfterBnovoLayout(s: UiState) {
+        val planned = s.bnovoPlanned ?: return
+        val nextIdx = s.bnovoWizardIndex + 1
+        if (nextIdx >= s.bnovoWizardSteps.size) {
+            applyBnovoPlanned(
+                planned,
+                s.bnovoLayoutChoices,
+                s.bnovoPerBedChoices,
+                s.bnovoCleaningDate ?: AutoTaskFromBnovo.tomorrowCleaningDate(),
+            )
         } else {
-            state.value = s.copy(bnovoBedChoices = map, bnovoBedStepIndex = idx + 1)
+            state.value = s.copy(bnovoWizardIndex = nextIdx, bnovoPerBedColorDraft = null)
         }
     }
 
     private fun applyBnovoPlanned(
         planned: List<AutoTaskFromBnovo.PlannedRoom>,
-        choices: Map<String, BnovoBedChoice>,
+        layoutChoices: Map<String, BnovoBedChoice>,
+        perBedChoices: Map<String, PerBedChoice>,
         cleaningDate: LocalDate,
     ) {
         val queue = planned.map { p ->
-            val c = choices[p.entity.name]
+            val n = p.entity.name
+            val lo = layoutChoices[n]
+            val pb = perBedChoices[n]
             AutoTaskFromBnovo.plannedToQueueItem(
                 planned = p,
-                bedsJoined = c?.joined ?: true,
-                splitBeds = c?.splitBeds ?: 2,
+                bedsJoined = lo?.joined ?: true,
+                splitBeds = lo?.splitBeds ?: 2,
+                floor4PerBedColor = pb?.color,
+                floor4PerBedCount = pb?.beds,
             )
         }
         state.value = state.value.copy(
@@ -249,9 +325,11 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             error = null,
             bnovoCleaningDate = null,
             bnovoPlanned = null,
-            bnovoBedSteps = emptyList(),
-            bnovoBedStepIndex = 0,
-            bnovoBedChoices = emptyMap(),
+            bnovoWizardSteps = emptyList(),
+            bnovoWizardIndex = 0,
+            bnovoLayoutChoices = emptyMap(),
+            bnovoPerBedChoices = emptyMap(),
+            bnovoPerBedColorDraft = null,
             taskForChannelDate = cleaningDate,
         )
     }
@@ -283,7 +361,32 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         val room = pending.room ?: return
         val linenProfile = pending.linenProfile
 
-        // В Python: если linen_profile и cleaning_type != "current" => выбор белья
+        if (linenProfile == "floor4" && cleaningTypeKey != "current") {
+            when {
+                TaskLogic.isFloor4LayoutBnovoRoom(room.name) -> {
+                    state.value = state.value.copy(
+                        step = Step.ChooseFloor4Layout,
+                        pendingAdd = pending.copy(cleaningType = cleaningTypeKey),
+                        error = null,
+                    )
+                    return
+                }
+                TaskLogic.isFloor4PerBedBnovoRoom(room.name) -> {
+                    state.value = state.value.copy(
+                        step = Step.ChooseLinenColor,
+                        pendingAdd = pending.copy(
+                            cleaningType = cleaningTypeKey,
+                            linenVariant = TaskLogic.LINEN_VARIANT_FLOOR4_PER_BED,
+                            linenColor = null,
+                            floor4MaxBeds = pending.floor4MaxBeds.coerceIn(1, 4),
+                        ),
+                        error = null,
+                    )
+                    return
+                }
+            }
+        }
+
         if (linenProfile != null && cleaningTypeKey != "current") {
             state.value = state.value.copy(
                 step = Step.ChooseLinenVariant,
@@ -362,6 +465,15 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         val cleaningType = pending.cleaningType ?: "current"
         val variant = pending.linenVariant ?: return
 
+        if (pending.linenProfile == "floor4" && variant == TaskLogic.LINEN_VARIANT_FLOOR4_PER_BED) {
+            state.value = state.value.copy(
+                step = Step.ChooseFloor4Beds,
+                pendingAdd = pending.copy(linenColor = colorKey),
+                error = null,
+            )
+            return
+        }
+
         val added = QueueItem(
             id = room.id,
             name = room.name,
@@ -385,6 +497,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         val cleaningType = pending.cleaningType ?: "current"
         val variant = pending.linenVariant ?: return
         val colorKey = pending.linenColor ?: return
+        val maxB = pending.floor4MaxBeds.coerceIn(1, 20)
 
         val added = QueueItem(
             id = room.id,
@@ -394,7 +507,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             linenProfile = "floor4",
             linenVariant = variant,
             linenColor = colorKey,
-            linenBeds = beds.coerceIn(1, 4),
+            linenBeds = beds.coerceIn(1, maxB),
         )
         state.value = state.value.copy(
             step = Step.Rooms,
@@ -409,6 +522,27 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         state.value = state.value.copy(
             step = Step.ChooseLinenColor,
             pendingAdd = pending.copy(linenColor = null),
+            error = null,
+        )
+    }
+
+    fun recordManualFloor4Layout(joined: Boolean) {
+        val pending = state.value.pendingAdd ?: return
+        val room = pending.room ?: return
+        val cleaningType = pending.cleaningType ?: return
+        val v = if (joined) TaskLogic.LINEN_VARIANT_FLOOR4_JOINED else TaskLogic.LINEN_VARIANT_FLOOR4_SPLIT
+        val added = QueueItem(
+            id = room.id,
+            name = room.name,
+            area = room.area,
+            cleaningType = cleaningType,
+            linenProfile = "floor4",
+            linenVariant = v,
+        )
+        state.value = state.value.copy(
+            step = Step.Rooms,
+            selectedRooms = state.value.selectedRooms + added,
+            pendingAdd = null,
             error = null,
         )
     }
@@ -687,9 +821,11 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             lastSentChannel = null,
             bnovoCleaningDate = null,
             bnovoPlanned = null,
-            bnovoBedSteps = emptyList(),
-            bnovoBedStepIndex = 0,
-            bnovoBedChoices = emptyMap(),
+            bnovoWizardSteps = emptyList(),
+            bnovoWizardIndex = 0,
+            bnovoLayoutChoices = emptyMap(),
+            bnovoPerBedChoices = emptyMap(),
+            bnovoPerBedColorDraft = null,
             taskForChannelDate = null,
         )
     }

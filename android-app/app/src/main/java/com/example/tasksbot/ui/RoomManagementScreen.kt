@@ -14,7 +14,6 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.tasksbot.ui.components.StandardTopBar
 import kotlin.math.abs
 
 @Composable
@@ -32,13 +32,27 @@ fun RoomManagementScreen(
     val vm: RoomsManagementViewModel = viewModel()
     val state = vm.state.value
 
+    val (barTitle, barSubtitle) = when (state.mode) {
+        RoomsManagementViewModel.Mode.List ->
+            "Помещения" to "Площади и включение в список выбора"
+        RoomsManagementViewModel.Mode.Add ->
+            "Новое помещение" to null
+        RoomsManagementViewModel.Mode.Edit ->
+            "Редактирование" to state.editingRoom?.name
+    }
+
     Scaffold(
         topBar = {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("🏨 Управление помещениями")
-                Spacer(modifier = Modifier.padding(2.dp))
-                TextButton(onClick = { onBackToMenu() }) { Text("🔙 В меню") }
-            }
+            StandardTopBar(
+                title = barTitle,
+                subtitle = barSubtitle,
+                onNavigateBack = {
+                    when (state.mode) {
+                        RoomsManagementViewModel.Mode.List -> onBackToMenu()
+                        else -> vm.cancelForm()
+                    }
+                },
+            )
         },
     ) { paddingValues ->
         LazyColumn(

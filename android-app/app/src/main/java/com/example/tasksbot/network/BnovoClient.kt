@@ -39,6 +39,8 @@ class BnovoClient(
         val statusName: String? = null,
         /** `dates.cancel_date` задано — бронь не считаем для занятости. */
         val hasCancelDate: Boolean = false,
+        /** Из `prices[].room_type_name` — вместимость номера (2/3/4-местный и т.д.). */
+        val roomTypeName: String? = null,
     ) {
         /** Завершённые и отменённые сегменты не участвуют в расчёте уборки на дату. */
         fun isActiveForOccupancy(): Boolean {
@@ -292,6 +294,7 @@ class BnovoClient(
             val departure = parseDepartureDate(o) ?: continue
             val statusName = parseStatusName(o)
             val hasCancelDate = parseHasCancelDate(o)
+            val roomTypeName = parseRoomTypeName(o)
             val roomLabels = extractRoomLabels(o)
             for (label in roomLabels) {
                 out.add(
@@ -301,6 +304,7 @@ class BnovoClient(
                         departure = departure,
                         statusName = statusName,
                         hasCancelDate = hasCancelDate,
+                        roomTypeName = roomTypeName,
                     ),
                 )
             }
@@ -355,6 +359,16 @@ class BnovoClient(
             }
         }
         return null
+    }
+
+    private fun parseRoomTypeName(o: JsonObject): String? {
+        val prices = o["prices"]?.takeIf { it.isJsonArray }?.asJsonArray ?: return null
+        for (el in prices) {
+            if (!el.isJsonObject) continue
+            val p = el.asJsonObject
+            p.getString("room_type_name")?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        }
+        return o.getString("room_type_name")
     }
 
     private fun parseStatusName(o: JsonObject): String? {

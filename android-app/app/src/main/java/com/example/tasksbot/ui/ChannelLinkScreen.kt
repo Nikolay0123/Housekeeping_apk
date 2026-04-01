@@ -11,6 +11,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,6 +28,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.tasksbot.ui.components.StandardTopBar
 import com.example.tasksbot.network.BnovoClient
 import com.example.tasksbot.network.NetworkStatus
 import kotlinx.coroutines.launch
@@ -49,12 +51,22 @@ fun ChannelLinkScreen(
     var bnovoDiagText by remember { mutableStateOf("") }
     var bnovoDiagLoading by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    Scaffold(
+        topBar = {
+            StandardTopBar(
+                title = "Канал и Bnovo",
+                subtitle = "Ссылка, учётные данные API, диагностика",
+                onNavigateBack = onBackToMenu,
+            )
+        },
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .padding(paddingValues)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
         Text("Ссылка на канал")
         Text(
             text = link ?: "(не задана в настройках)",
@@ -141,9 +153,6 @@ fun ChannelLinkScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-
-        Button(onClick = onBackToMenu, modifier = Modifier.fillMaxWidth()) {
-            Text("🔙 Назад")
         }
     }
 

@@ -6,21 +6,45 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 /**
- * Автозадание на «завтра» для 1-го этажа: номера 101–109 и общие помещения (лимит [TaskLogic.AREA_LIMIT] м²).
+ * Автозадание на «завтра» для 1-го и 4-го этажей по данным Bnovo (лимит [TaskLogic.AREA_LIMIT] м²).
  */
 object AutoTaskFromBnovo {
 
     enum class FloorChoice {
-        /** Зона из ТЗ: 101–109 + кабинеты + 1 этаж + кухня. */
         First,
+        Fourth,
     }
 
     data class PlannedRoom(
         val entity: RoomEntity,
         val cleaningType: String,
-        /** Нужен выбор «соединены / разъединены» (101–107, 109 при смене белья). */
-        val needsBedChoice: Boolean,
+        /** 1 этаж: мастер «соединены / разъединены» для classic. */
+        val needsClassicBedWizard: Boolean,
+        /** 401.1, 402.4, 404.1, 405.4 — соединены или разъединены (комплекты 11/12). */
+        val needsFloor4LayoutWizard: Boolean,
+        /** Остальные номера 4 этажа — цвет и число кроватей (ёмкость из Bnovo). */
+        val needsFloor4PerBedWizard: Boolean,
+        /** Верхняя граница числа кроватей в мастере per-bed. */
+        val floor4MaxBeds: Int,
     )
+
+    sealed class BnovoWizardStep {
+        data class ClassicBeds(val planned: PlannedRoom) : BnovoWizardStep()
+        data class Floor4Layout(val planned: PlannedRoom) : BnovoWizardStep()
+        data class Floor4PerBed(val planned: PlannedRoom, val maxBeds: Int) : BnovoWizardStep()
+    }
+
+    fun buildBnovoWizardSteps(planned: List<PlannedRoom>): List<BnovoWizardStep> {
+        val out = ArrayList<BnovoWizardStep>()
+        for (p in planned) {
+            when {
+                p.needsClassicBedWizard -> out.add(BnovoWizardStep.ClassicBeds(p))
+                p.needsFloor4LayoutWizard -> out.add(BnovoWizardStep.Floor4Layout(p))
+                p.needsFloor4PerBedWizard -> out.add(BnovoWizardStep.Floor4PerBed(p, p.floor4MaxBeds.coerceIn(1, 20)))
+            }
+        }
+        return out
+    }
 
     private val FLOOR1_NUMBER_NAMES: List<String> = (101..109).map { "Номер $it" }
 
@@ -32,10 +56,27 @@ object AutoTaskFromBnovo {
         "Кухня",
     )
 
+    private val FLOOR4_ORDER: List<String> = listOf(
+        "Номер 401.1", "Номер 401.2", "Номер 401.3", "Номер 401.4",
+        "Номер 402.1", "Номер 402.2", "Номер 402.3", "Номер 402.4",
+        "Номер 403",
+        "Номер 404.1", "Номер 404.2", "Номер 404.3", "Номер 404.4",
+        "Номер 405.1", "Номер 405.2", "Номер 405.3", "Номер 405.4",
+        "Блок 401", "Блок 402", "Кухня блока 401,402",
+        "Блок 404", "Блок 405", "Кухня блока 404,405",
+        "Холл 4 этаж", "Лестница до 5 этажа", "Арендаторы 2 этаж", "Входная группа",
+    )
+
     fun tomorrowCleaningDate(): LocalDate = LocalDate.now().plusDays(1)
 
     fun plannedRoomsForFloor(floor: FloorChoice): List<String> = when (floor) {
         FloorChoice.First -> FLOOR1_NUMBER_NAMES + FLOOR1_COMMON_NAMES
+        FloorChoice.Fourth -> FLOOR4_ORDER
+    }
+
+    fun emptyPlanMessageForFloor(floor: FloorChoice): String = when (floor) {
+        FloorChoice.First -> "По данным Bnovo на завтра нет задач по номерам 101–109. Проверьте API и названия номеров."
+        FloorChoice.Fourth -> "По данным Bnovo на завтра нет задач по выбранным помещениям 4 этажа. Проверьте API и названия номеров."
     }
 
     /** Группировка сырых броней по каноническому имени комнаты (как в приложении). */
@@ -53,31 +94,69 @@ object AutoTaskFromBnovo {
         activeRoomsByName: Map<String, RoomEntity>,
         bookingsByRoom: Map<String, List<BnovoClient.NormalizedBooking>>,
         cleaningDate: LocalDate,
+    ): List<PlannedRoom> = planOrderedRooms(
+        roomNames = FLOOR1_NUMBER_NAMES,
+        commonNames = FLOOR1_COMMON_NAMES,
+        activeRoomsByName = activeRoomsByName,
+        bookingsByRoom = bookingsByRoom,
+        cleaningDate = cleaningDate,
+        floorChoice = FloorChoice.First,
+    )
+
+    fun planFourthFloor(
+        activeRoomsByName: Map<String, RoomEntity>,
+        bookingsByRoom: Map<String, List<BnovoClient.NormalizedBooking>>,
+        cleaningDate: LocalDate,
+    ): List<PlannedRoom> = planOrderedRooms(
+        roomNames = FLOOR4_ORDER.filter { it.startsWith("Номер ") },
+        commonNames = FLOOR4_ORDER.filter { !it.startsWith("Номер ") },
+        activeRoomsByName = activeRoomsByName,
+        bookingsByRoom = bookingsByRoom,
+        cleaningDate = cleaningDate,
+        floorChoice = FloorChoice.Fourth,
+    )
+
+    private fun planOrderedRooms(
+        roomNames: List<String>,
+        commonNames: List<String>,
+        activeRoomsByName: Map<String, RoomEntity>,
+        bookingsByRoom: Map<String, List<BnovoClient.NormalizedBooking>>,
+        cleaningDate: LocalDate,
+        floorChoice: FloorChoice,
     ): List<PlannedRoom> {
         val queue = ArrayList<PlannedRoom>()
         var runningArea = 0.0
         val limit = TaskLogic.AREA_LIMIT
 
-        for (name in FLOOR1_NUMBER_NAMES) {
+        for (name in roomNames) {
             val ent = activeRoomsByName[name] ?: continue
             val key = cleaningTypeForRoom(
                 roomName = name,
                 bookings = bookingsByRoom[name].orEmpty(),
                 cleaningDate = cleaningDate,
             ) ?: continue
-            val needsBeds = needsBedConfiguration(name, key)
-            queue.add(PlannedRoom(entity = ent, cleaningType = key, needsBedChoice = needsBeds))
+            val planned = plannedRoomFor(
+                floorChoice = floorChoice,
+                entity = ent,
+                cleaningType = key,
+                bookings = bookingsByRoom[name].orEmpty(),
+                cleaningDate = cleaningDate,
+            )
+            queue.add(planned)
             runningArea += ent.area
         }
 
-        for (name in FLOOR1_COMMON_NAMES) {
+        for (name in commonNames) {
             val ent = activeRoomsByName[name] ?: continue
             if (runningArea + ent.area > limit) break
             queue.add(
                 PlannedRoom(
                     entity = ent,
                     cleaningType = "current",
-                    needsBedChoice = false,
+                    needsClassicBedWizard = false,
+                    needsFloor4LayoutWizard = false,
+                    needsFloor4PerBedWizard = false,
+                    floor4MaxBeds = 4,
                 ),
             )
             runningArea += ent.area
@@ -85,7 +164,58 @@ object AutoTaskFromBnovo {
         return queue
     }
 
-    fun needsBedConfiguration(roomName: String, cleaningType: String): Boolean {
+    /**
+     * Ёмкость номера из [room_type_name] брони, релевантной дате уборки (проживание / выезд утром).
+     */
+    internal fun guestCapacityFromBookings(
+        bookings: List<BnovoClient.NormalizedBooking>,
+        cleaningDate: LocalDate,
+    ): Int? {
+        val C = cleaningDate
+        val bounded = bookings.filter { !it.arrival.isAfter(it.departure) && it.isActiveForOccupancy() }
+        val staying = bounded.filter { it.arrival.isBefore(C) && it.departure.isAfter(C) }
+        val leaving = bounded.filter { it.departure == C }
+        val pool = when {
+            staying.isNotEmpty() -> staying
+            leaving.isNotEmpty() -> leaving
+            else -> bounded
+        }
+        var best: Int? = null
+        for (b in pool) {
+            val cap = TaskLogic.guestCapacityFromRoomTypeName(b.roomTypeName) ?: continue
+            best = if (best == null) cap else maxOf(best, cap)
+        }
+        return best
+    }
+
+    fun plannedRoomFor(
+        floorChoice: FloorChoice,
+        entity: RoomEntity,
+        cleaningType: String,
+        bookings: List<BnovoClient.NormalizedBooking>,
+        cleaningDate: LocalDate,
+    ): PlannedRoom {
+        val name = entity.name
+        val cap = guestCapacityFromBookings(bookings, cleaningDate)?.coerceIn(1, 20) ?: 4
+        val classic = TaskLogic.roomLinenProfile(name) == "classic"
+        val needsClassic = floorChoice == FloorChoice.First &&
+            classic &&
+            needsBedConfigurationFirstFloor(name, cleaningType)
+        val perBed = TaskLogic.isFloor4PerBedBnovoRoom(name)
+        val layout = TaskLogic.isFloor4LayoutBnovoRoom(name)
+        val needsF4Layout = floorChoice == FloorChoice.Fourth && layout && cleaningType != "current"
+        val needsF4PerBed = floorChoice == FloorChoice.Fourth && perBed && cleaningType != "current"
+        return PlannedRoom(
+            entity = entity,
+            cleaningType = cleaningType,
+            needsClassicBedWizard = needsClassic,
+            needsFloor4LayoutWizard = needsF4Layout,
+            needsFloor4PerBedWizard = needsF4PerBed,
+            floor4MaxBeds = cap,
+        )
+    }
+
+    fun needsBedConfigurationFirstFloor(roomName: String, cleaningType: String): Boolean {
         if (roomName !in FLOOR1_NUMBER_NAMES) return false
         if (TaskLogic.isRoom108(roomName)) return false
         val linen = TaskLogic.roomLinenProfile(roomName)
@@ -93,17 +223,45 @@ object AutoTaskFromBnovo {
         return cleaningType != "current"
     }
 
-    /**
-     * @param bedsJoined `true` — соединены; `false` — разъединены; `null` по умолчанию как соединены.
-     * @param splitBeds при разъединённых: 1 или 2 кровати (для 101–107 и 109).
-     */
     fun plannedToQueueItem(
         planned: PlannedRoom,
         bedsJoined: Boolean?,
-        splitBeds: Int = 2,
+        splitBeds: Int,
+        floor4PerBedColor: String?,
+        floor4PerBedCount: Int?,
     ): QueueItem {
         val room = planned.entity
         val ct = planned.cleaningType
+        val name = room.name
+
+        if (TaskLogic.isFloor4LayoutBnovoRoom(name) && ct != "current") {
+            val joined = bedsJoined ?: true
+            return QueueItem(
+                id = room.id,
+                name = room.name,
+                area = room.area,
+                cleaningType = ct,
+                linenProfile = "floor4",
+                linenVariant = if (joined) TaskLogic.LINEN_VARIANT_FLOOR4_JOINED else TaskLogic.LINEN_VARIANT_FLOOR4_SPLIT,
+            )
+        }
+
+        if (TaskLogic.isFloor4PerBedBnovoRoom(name) && ct != "current") {
+            val color = floor4PerBedColor?.takeIf { it in TaskLogic.LINEN_COLOR_ORDER_FLOOR4_PER_BED } ?: "blue"
+            val maxB = planned.floor4MaxBeds.coerceIn(1, 20)
+            val beds = (floor4PerBedCount ?: 1).coerceIn(1, maxB)
+            return QueueItem(
+                id = room.id,
+                name = room.name,
+                area = room.area,
+                cleaningType = ct,
+                linenProfile = "floor4",
+                linenVariant = TaskLogic.LINEN_VARIANT_FLOOR4_PER_BED,
+                linenColor = color,
+                linenBeds = beds,
+            )
+        }
+
         val classic = TaskLogic.roomLinenProfile(room.name)
         val needsLinen = classic != null && ct != "current"
 
@@ -182,7 +340,6 @@ object AutoTaskFromBnovo {
         cleaningDate: LocalDate,
     ): String? {
         val C = cleaningDate
-        // Включая «нулевые» ночи, если заезд = выезд (бронь на день — у API бывает arrival == departure).
         val bounded = bookings.filter {
             !it.arrival.isAfter(it.departure) && it.isActiveForOccupancy()
         }
@@ -207,7 +364,6 @@ object AutoTaskFromBnovo {
         return null
     }
 
-    /** День заезда = 1; следующий календарный день = 2 и т.д. */
     private fun dayIndexFromArrival(arrival: LocalDate, cleaningDate: LocalDate): Int {
         val d = ChronoUnit.DAYS.between(arrival, cleaningDate).toInt()
         return d + 1

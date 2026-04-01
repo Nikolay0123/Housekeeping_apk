@@ -8,10 +8,12 @@ class RoomsRepository(
     private val db: AppDatabase,
 ) {
     suspend fun ensureSeeded() {
-        if (db.roomDao().countRooms() > 0) return
         val dao = db.roomDao()
+        val existing = dao.getAllRooms().associateBy { it.name }
         for ((name, area) in SeedData.initialRooms) {
-            dao.insert(RoomEntity(name = name, area = area, isActive = true))
+            if (name !in existing) {
+                dao.insert(RoomEntity(name = name, area = area, isActive = true))
+            }
         }
     }
 

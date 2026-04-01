@@ -1,5 +1,7 @@
 package com.example.tasksbot.domain
 
+import com.example.tasksbot.db.RoomEntity
+import com.example.tasksbot.db.SeedData
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.time.Instant
@@ -27,7 +29,14 @@ object TaskLogic {
         Other,
     }
 
+    private val FLOOR4_TAB_BY_NAME: Set<String> = setOf(
+        "Блок 401", "Блок 402", "Кухня блока 401,402",
+        "Блок 404", "Блок 405", "Кухня блока 404,405",
+        "Холл 4 этаж", "Лестница до 5 этажа", "Арендаторы 2 этаж", "Входная группа",
+    )
+
     fun roomPickerTab(roomName: String): RoomPickerTab {
+        if (roomName in FLOOR4_TAB_BY_NAME) return RoomPickerTab.Block404405
         if (!roomName.startsWith("Номер ")) return RoomPickerTab.Other
         val rest = roomName.removePrefix("Номер ").trim()
         if (rest.all { it.isDigit() }) {
@@ -45,6 +54,11 @@ object TaskLogic {
         if (major in 401..402) return RoomPickerTab.Block404405
         if (major in 404..405) return RoomPickerTab.Block404405
         return RoomPickerTab.Other
+    }
+
+    fun sortRoomsForPicker(rooms: List<RoomEntity>): List<RoomEntity> {
+        val order = SeedData.roomPickerPriority.withIndex().associate { it.value to it.index }
+        return rooms.sortedWith(compareBy({ order[it.name] ?: 10_000 }, { it.name }))
     }
 
     /** Номера 404.1–405.4 — отдельный шаг «сколько кроватей застелить». */
@@ -131,6 +145,45 @@ object TaskLogic {
 
     val LINEN_COLOR_ORDER: List<String> = listOf("blue", "gray", "stripe", "white")
 
+    /** Только для номеров 4 этажа с выбором комплекта «на кровать» (Bnovo / ручное). */
+    val LINEN_COLOR_ORDER_FLOOR4_PER_BED: List<String> = listOf("blue", "gray", "stripe")
+
+    const val LINEN_VARIANT_FLOOR4_PER_BED: Int = 10
+    const val LINEN_VARIANT_FLOOR4_JOINED: Int = 11
+    const val LINEN_VARIANT_FLOOR4_SPLIT: Int = 12
+
+    private val FLOOR4_PER_BED_ROOM_NAMES: Set<String> = setOf(
+        "Номер 401.2", "Номер 401.3", "Номер 401.4",
+        "Номер 402.1", "Номер 402.2", "Номер 402.3",
+        "Номер 403",
+        "Номер 404.2", "Номер 404.3", "Номер 404.4",
+        "Номер 405.1", "Номер 405.2", "Номер 405.3",
+    )
+
+    private val FLOOR4_LAYOUT_ROOM_NAMES: Set<String> = setOf(
+        "Номер 401.1", "Номер 402.4", "Номер 404.1", "Номер 405.4",
+    )
+
+    fun isFloor4PerBedBnovoRoom(roomName: String): Boolean = roomName in FLOOR4_PER_BED_ROOM_NAMES
+
+    fun isFloor4LayoutBnovoRoom(roomName: String): Boolean = roomName in FLOOR4_LAYOUT_ROOM_NAMES
+
+    /**
+     * Число мест из [room_type_name] Bnovo (напр. «2-местный», «трёхместный»).
+     * Если не распознано — null (тогда подставляется безопасный максимум в мастере).
+     */
+    fun guestCapacityFromRoomTypeName(roomTypeName: String?): Int? {
+        if (roomTypeName.isNullOrBlank()) return null
+        val s = roomTypeName.lowercase(Locale.getDefault())
+        return when {
+            "4-мест" in s || "4 мест" in s || "четырёхмест" in s || "четырехмест" in s -> 4
+            "3-мест" in s || "3 мест" in s || "трёхмест" in s || "трехмест" in s -> 3
+            "2-мест" in s || "2 мест" in s || "двухмест" in s || "двуспальн" in s -> 2
+            "1-мест" in s || "1 мест" in s || "одномест" in s -> 1
+            else -> null
+        }
+    }
+
     fun formatLinenColor(key: String?): String {
         if (key.isNullOrBlank()) return ""
         return LINEN_COLORS[key] ?: key
@@ -211,7 +264,34 @@ object TaskLogic {
         "Халат махровый" to 1,
     )
 
-    // Комплекты белья для номеров 401–405 (4 этаж): варианты 1/2/3 — множитель 2/3/4 на каждую позицию
+    /** Одна заправляемая кровать (масштаб по [linenBeds] для варианта [LINEN_VARIANT_FLOOR4_PER_BED]). */
+    val LINEN_FLOOR4_PER_BED_BASE: Map<String, Int> = mapOf(
+        "Простыня 1,5 спальная" to 1,
+        "Пододеяльник 1,5 спальный" to 1,
+        "Наволочка" to 1,
+        "Полотенце банное" to 1,
+        "Полотенце 40х70" to 1,
+    )
+
+    /** 401.1 / 402.4 / 404.1 / 405.4 — кровати соединены. */
+    val LINEN_FLOOR4_JOINED_LAYOUT: Map<String, Int> = mapOf(
+        "Простыня двуспальная" to 1,
+        "Пододеяльник 1,5 спальный" to 2,
+        "Наволочка" to 2,
+        "Полотенце банное" to 2,
+        "Полотенце 40х70" to 2,
+    )
+
+    /** Те же номера — кровати разъединены (две 1,5-спальные связки). */
+    val LINEN_FLOOR4_SPLIT_LAYOUT: Map<String, Int> = mapOf(
+        "Простыня 1,5 спальная" to 2,
+        "Пододеяльник 1,5 спальный" to 2,
+        "Наволочка" to 2,
+        "Полотенце банное" to 2,
+        "Полотенце 40х70" to 2,
+    )
+
+    /** Устаревшие варианты 1–3 (на 2/3/4 гостя); для совместимости со старыми заданиями в истории. */
     val LINEN_PACKAGES_FLOOR4: Map<Int, Map<String, Int>> = mapOf(
         1 to mapOf(
             "Простыня 1,5 спальная" to 2,
@@ -305,9 +385,19 @@ object TaskLogic {
      */
     fun floor4LinenQuantities(item: QueueItem): LinkedHashMap<String, Int>? {
         val variant = item.linenVariant ?: return null
-        val base = LINEN_PACKAGES_FLOOR4[variant] ?: return null
         if (resolveLinenProfile(item) != "floor4") return null
-        return LinkedHashMap(base)
+        when (variant) {
+            LINEN_VARIANT_FLOOR4_PER_BED -> {
+                val n = (item.linenBeds ?: 1).coerceIn(1, 20)
+                return LinkedHashMap(LINEN_FLOOR4_PER_BED_BASE.mapValues { (_, q) -> q * n })
+            }
+            LINEN_VARIANT_FLOOR4_JOINED -> return LinkedHashMap(LINEN_FLOOR4_JOINED_LAYOUT)
+            LINEN_VARIANT_FLOOR4_SPLIT -> return LinkedHashMap(LINEN_FLOOR4_SPLIT_LAYOUT)
+            else -> {
+                val base = LINEN_PACKAGES_FLOOR4[variant] ?: return null
+                return LinkedHashMap(base)
+            }
+        }
     }
 
     fun formatLinenPackageLines(pkg: Map<String, Int>): List<String> =
@@ -319,14 +409,22 @@ object TaskLogic {
     }
 
     fun floor4LinenVariantButtonSubtitle(variant: Int): String {
-        val pkg = LINEN_PACKAGES_FLOOR4[variant] ?: return ""
-        val label = when (variant) {
-            1 -> "База на 2 места (можно уменьшить, если застилается 1 кровать — в блоке 404/405)."
-            2 -> "База на 3 места."
-            3 -> "База на 4 места."
-            else -> ""
+        val pkg = when (variant) {
+            LINEN_VARIANT_FLOOR4_PER_BED -> LINEN_FLOOR4_PER_BED_BASE
+            LINEN_VARIANT_FLOOR4_JOINED -> LINEN_FLOOR4_JOINED_LAYOUT
+            LINEN_VARIANT_FLOOR4_SPLIT -> LINEN_FLOOR4_SPLIT_LAYOUT
+            else -> LINEN_PACKAGES_FLOOR4[variant] ?: return ""
         }
         val lines = formatLinenPackageLines(pkg)
+        val label = when (variant) {
+            LINEN_VARIANT_FLOOR4_PER_BED -> "За каждую выбранную кровать — полный набор строк ниже."
+            LINEN_VARIANT_FLOOR4_JOINED -> "Кровати соединены."
+            LINEN_VARIANT_FLOOR4_SPLIT -> "Кровати разъединены."
+            1 -> "База на 2 места (устар.)."
+            2 -> "База на 3 места (устар.)."
+            3 -> "База на 4 места (устар.)."
+            else -> ""
+        }
         return if (label.isNotEmpty()) "$label\n${lines.joinToString("\n")}" else lines.joinToString("\n")
     }
 
@@ -341,6 +439,9 @@ object TaskLogic {
     }
 
     fun floor4LinenVariantButtonTitle(variant: Int): String = when (variant) {
+        LINEN_VARIANT_FLOOR4_PER_BED -> "Бельё: на каждую заправляемую кровать"
+        LINEN_VARIANT_FLOOR4_JOINED -> "Кровати соединены (двуспальная простыня)"
+        LINEN_VARIANT_FLOOR4_SPLIT -> "Кровати разъединены (две 1,5-спальные)"
         1 -> "Комплект на 2 гостя (база для масштаба)"
         2 -> "Комплект на 3 гостя"
         3 -> "Комплект на 4 гостя"
@@ -358,10 +459,13 @@ object TaskLogic {
                 lines += "🧺 Бельё (${classicLinenVariantButtonTitle(v)}):"
                 lines += formatLinenPackageLines(pkg)
             }
-            profile == "floor4" && v in LINEN_PACKAGES_FLOOR4 -> {
+            profile == "floor4" && floor4LinenQuantities(item) != null -> {
                 val pkg = floor4LinenQuantities(item) ?: return emptyList()
                 val col = formatLinenColor(item.linenColor)
-                if (col.isNotEmpty()) lines += "Цвет комплекта: $col"
+                if (col.isNotEmpty() && v == LINEN_VARIANT_FLOOR4_PER_BED) lines += "Цвет комплекта: $col"
+                if (v == LINEN_VARIANT_FLOOR4_PER_BED && item.linenBeds != null) {
+                    lines += "Заправляемых кроватей: ${item.linenBeds}"
+                }
                 lines += "🧺 Состав белья (${floor4LinenVariantButtonTitle(v)}):"
                 lines += formatLinenPackageLines(pkg)
             }
@@ -450,8 +554,22 @@ object TaskLogic {
                         else -> ""
                     }
                 } else if (profile == "floor4") {
-                    val col = formatLinenColor(r.linenColor)
-                    if (col.isNotEmpty()) bedConfig = " — бельё: $col"
+                    when (r.linenVariant) {
+                        LINEN_VARIANT_FLOOR4_PER_BED -> {
+                            val col = formatLinenColor(r.linenColor)
+                            val n = r.linenBeds ?: 1
+                            bedConfig = buildString {
+                                if (col.isNotEmpty()) append(" — $col")
+                                append(" — кроватей: $n")
+                            }
+                        }
+                        LINEN_VARIANT_FLOOR4_JOINED -> bedConfig = " — кровати соединены"
+                        LINEN_VARIANT_FLOOR4_SPLIT -> bedConfig = " — кровати разъединены"
+                        else -> {
+                            val col = formatLinenColor(r.linenColor)
+                            if (col.isNotEmpty()) bedConfig = " — бельё: $col"
+                        }
+                    }
                 }
             }
 
@@ -467,14 +585,17 @@ object TaskLogic {
             if (r.linenVariant != null) {
                 val variant = r.linenVariant!!
 
-                if (profile == "floor4" && variant in LINEN_PACKAGES_FLOOR4) {
+                if (profile == "floor4") {
                     val pkg = floor4LinenQuantities(r) ?: continue
                     for ((itemName, qty) in pkg) addLinenItem(itemName, qty)
-                    val ck = r.linenColor
-                    if (ck != null && ck in LINEN_COLORS) {
-                        val label = LINEN_COLORS[ck]!!
-                        val sumQty = pkg.values.sum()
-                        linenColorTotals[label] = (linenColorTotals[label] ?: 0) + sumQty
+                    if (variant == LINEN_VARIANT_FLOOR4_PER_BED) {
+                        val ck = r.linenColor
+                        // В итог «по цвету» считаем условные единицы (составляющие комплекта × кроватей).
+                        if (ck != null && ck in LINEN_COLORS) {
+                            val label = LINEN_COLORS[ck]!!
+                            val sumQty = pkg.values.sum()
+                            linenColorTotals[label] = (linenColorTotals[label] ?: 0) + sumQty
+                        }
                     }
                 } else if (profile == "classic" && (variant in LINEN_PACKAGES || (isRoom108(r.name) && variant == 3))) {
                     val pkg = classicLinenQuantities(r)
@@ -560,8 +681,19 @@ object TaskLogic {
             var extra = ""
 
             if (profile == "floor4" && r.linenVariant != null) {
-                val lc = formatLinenColor(r.linenColor)
-                if (lc.isNotEmpty()) extra = ", комплект ${r.linenVariant} ($lc)"
+                val v = r.linenVariant!!
+                extra = when (v) {
+                    LINEN_VARIANT_FLOOR4_PER_BED -> {
+                        val lc = formatLinenColor(r.linenColor)
+                        ", ${r.linenBeds ?: 1} кров. бельё" + (if (lc.isNotEmpty()) " ($lc)" else "")
+                    }
+                    LINEN_VARIANT_FLOOR4_JOINED -> ", соед. кровати"
+                    LINEN_VARIANT_FLOOR4_SPLIT -> ", разъед. кровати"
+                    else -> {
+                        val lc = formatLinenColor(r.linenColor)
+                        if (lc.isNotEmpty()) ", комплект $v ($lc)" else ", комплект $v"
+                    }
+                }
             } else if (profile == "classic" && r.linenVariant == 2) {
                 val bk = classicVariant2BedsLabel(r.linenBeds)
                 extra = ", вар.2 — ${bk} кров."
