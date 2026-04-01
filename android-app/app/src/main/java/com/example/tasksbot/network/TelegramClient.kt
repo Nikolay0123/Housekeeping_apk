@@ -44,7 +44,7 @@ class TelegramClient(
                 if (parsed.ok != true || parsed.result == null) {
                     throw IllegalStateException("Telegram error: $body")
                 }
-                parsed.result!!.messageId
+                parsed.result.messageId
             }
         } catch (e: IOException) {
             throw IllegalStateException(

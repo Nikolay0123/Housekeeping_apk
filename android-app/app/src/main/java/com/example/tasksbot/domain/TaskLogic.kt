@@ -20,8 +20,8 @@ object TaskLogic {
 
     /** Группировка номеров на экране выбора:
      *  - 1 этаж: 101–109
-     *  - 4 этаж: 401.1–401.4, 402.1–402.4, 403, 404.1–405.4
-     *  - Помещения: всё остальное
+     *  - 4 этаж: 401.1–401.4, 402.1–402.4, 403, 404.1–405.4, блоки, холл, лестница до 5 этажа
+     *  - Помещения: прочее (арендаторы 2/3 этаж, входная группа, кабинеты и т.д.)
      */
     enum class RoomPickerTab {
         Floor1,
@@ -32,7 +32,7 @@ object TaskLogic {
     private val FLOOR4_TAB_BY_NAME: Set<String> = setOf(
         "Блок 401", "Блок 402", "Кухня блока 401,402",
         "Блок 404", "Блок 405", "Кухня блока 404,405",
-        "Холл 4 этаж", "Лестница до 5 этажа", "Арендаторы 2 этаж", "Входная группа",
+        "Холл 4 этаж", "Лестница до 5 этажа",
     )
 
     fun roomPickerTab(roomName: String): RoomPickerTab {
@@ -530,7 +530,7 @@ object TaskLogic {
 
             var bedConfig = ""
             if (r.linenVariant != null) {
-                val variant = r.linenVariant!!
+                val variant = r.linenVariant
                 if (profile == "classic" && (variant in LINEN_PACKAGES || (isRoom108(r.name) && variant == 3))) {
                     bedConfig = when (variant) {
                         1 -> " — кровати соединены"
@@ -583,7 +583,7 @@ object TaskLogic {
 
             // Totals calculation (под бельё)
             if (r.linenVariant != null) {
-                val variant = r.linenVariant!!
+                val variant = r.linenVariant
 
                 if (profile == "floor4") {
                     val pkg = floor4LinenQuantities(r) ?: continue
@@ -681,7 +681,7 @@ object TaskLogic {
             var extra = ""
 
             if (profile == "floor4" && r.linenVariant != null) {
-                val v = r.linenVariant!!
+                val v = r.linenVariant
                 extra = when (v) {
                     LINEN_VARIANT_FLOOR4_PER_BED -> {
                         val lc = formatLinenColor(r.linenColor)

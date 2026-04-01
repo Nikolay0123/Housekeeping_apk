@@ -10,15 +10,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
@@ -38,6 +46,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.tasksbot.ui.components.ScreenWelcomeStrip
+import com.example.tasksbot.ui.components.SectionGroupCard
 import com.example.tasksbot.ui.components.StandardTopBar
 import com.example.tasksbot.domain.AutoTaskFromBnovo
 import com.example.tasksbot.domain.QueueItem
@@ -74,16 +84,21 @@ fun CreateTaskScreen(
         },
     ) { paddingValues ->
         LazyColumn(
-            modifier = Modifier.padding(paddingValues).padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(paddingValues).padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { CreateTaskBody(state = s, authVm = authVm, createVm = createVm, onGoToHistory = onGoToHistory, onBackToMenu = onBackToMenu, onCommentOpen = { isCommentDialogOpen = true }) }
         }
     }
 
     if (isCommentDialogOpen) {
+        val scheme = MaterialTheme.colorScheme
         AlertDialog(
             onDismissRequest = { isCommentDialogOpen = false },
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = scheme.surface,
+            titleContentColor = scheme.onSurface,
+            textContentColor = scheme.onSurfaceVariant,
             confirmButton = {
                 Button(
                     onClick = {
@@ -96,22 +111,33 @@ fun CreateTaskScreen(
                         createVm.setComment(comment)
                         isCommentDialogOpen = false
                     },
-                ) { Text("ОК") }
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("ОК", fontWeight = FontWeight.Medium) }
             },
             dismissButton = {
-                TextButton(onClick = { isCommentDialogOpen = false }) { Text("Отмена") }
+                TextButton(
+                    onClick = { isCommentDialogOpen = false },
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("Отмена") }
             },
-            title = { Text("💬 Комментарий") },
+            title = {
+                Text(
+                    "Комментарий к заданию",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = draftComment,
                         onValueChange = { draftComment = it },
-                        label = { Text("Введите комментарий (или '-')") },
+                        label = { Text("Текст (или «-» чтобы очистить)") },
                         modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
                     )
                 }
-            }
+            },
         )
     }
 }
@@ -127,18 +153,39 @@ private fun CreateTaskBody(
 ) {
     when (state.step) {
         CreateTaskViewModel.Step.ChooseEmployee -> {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "Кто выполняет задание?",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+                ScreenWelcomeStrip(
+                    title = "Исполнитель",
+                    subtitle = "Кто будет работать по этому заданию",
                 )
-                Text("Выберите сотрудника:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Button(onClick = { createVm.selectEmployee("dina") }, modifier = Modifier.fillMaxWidth()) { Text("Дина") }
-                Button(onClick = { createVm.selectEmployee("lena") }, modifier = Modifier.fillMaxWidth()) { Text("Лена") }
-                Button(onClick = { createVm.selectEmployee("olya") }, modifier = Modifier.fillMaxWidth()) { Text("Оля") }
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = { onBackToMenu() }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Назад в меню") }
+                SectionGroupCard(title = "Сотрудник") {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            "Выберите имя:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Button(
+                            onClick = { createVm.selectEmployee("dina") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                        ) { Text("Дина", fontWeight = FontWeight.Medium) }
+                        Button(
+                            onClick = { createVm.selectEmployee("lena") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                        ) { Text("Лена", fontWeight = FontWeight.Medium) }
+                        Button(
+                            onClick = { createVm.selectEmployee("olya") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                        ) { Text("Оля", fontWeight = FontWeight.Medium) }
+                    }
+                }
+                TextButton(
+                    onClick = { onBackToMenu() },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) { Text("Назад в меню") }
             }
         }
 
@@ -156,12 +203,14 @@ private fun CreateTaskBody(
                 }
             }
 
+            val schemeRooms = MaterialTheme.colorScheme
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                        containerColor = schemeRooms.primaryContainer.copy(alpha = 0.45f),
                     ),
                     shape = MaterialTheme.shapes.medium,
+                    border = BorderStroke(1.dp, schemeRooms.outlineVariant.copy(alpha = 0.35f)),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                 ) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -188,22 +237,28 @@ private fun CreateTaskBody(
                     onClick = { createVm.startBnovoWizard() },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !state.isSending,
-                ) { Text("Сформировать на завтра (Bnovo)") }
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("Сформировать на завтра (Bnovo)", fontWeight = FontWeight.Medium) }
 
                 Text("Очередь уборки", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
                 if (state.selectedRooms.isEmpty()) {
-                    Text("Пока пусто — добавьте помещения ниже.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                    Text(
+                        "Пока пусто — добавьте помещения ниже.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 } else {
-                    state.selectedRooms.forEachIndexed { idx, item ->
-                        QueueRow(
-                            idx = idx,
-                            item = item,
-                            onUp = { createVm.moveUp(idx) },
-                            onDown = { createVm.moveDown(idx) },
-                            onDelete = { createVm.removeAt(idx) },
-                            onChangeType = { createVm.changeQueueItemCleaningType(idx) },
-                        )
-                        Divider()
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        state.selectedRooms.forEachIndexed { idx, item ->
+                            QueueRow(
+                                idx = idx,
+                                item = item,
+                                onUp = { createVm.moveUp(idx) },
+                                onDown = { createVm.moveDown(idx) },
+                                onDelete = { createVm.removeAt(idx) },
+                                onChangeType = { createVm.changeQueueItemCleaningType(idx) },
+                            )
+                        }
                     }
                 }
 
@@ -223,6 +278,8 @@ private fun CreateTaskBody(
                         ScrollableTabRow(
                             selectedTabIndex = tabRows.indexOf(roomTab).coerceIn(0, tabRows.lastIndex),
                             edgePadding = 0.dp,
+                            containerColor = schemeRooms.surfaceVariant.copy(alpha = 0.4f),
+                            contentColor = schemeRooms.onSurface,
                         ) {
                             tabRows.forEach { tab ->
                                 Tab(
@@ -255,6 +312,7 @@ private fun CreateTaskBody(
                                 FilledTonalButton(
                                     onClick = { createVm.addRoomStart(room) },
                                     modifier = Modifier.fillMaxWidth(),
+                                    shape = MaterialTheme.shapes.medium,
                                 ) {
                                     Text(
                                         "${room.name} ($areaText м²)$suffix",
@@ -276,6 +334,7 @@ private fun CreateTaskBody(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !state.isSending,
+                    shape = MaterialTheme.shapes.medium,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 ) {
                     if (state.isSending) {
@@ -285,7 +344,7 @@ private fun CreateTaskBody(
                             strokeWidth = 2.dp,
                         )
                     } else {
-                        Text("Отправить в Telegram")
+                        Text("Отправить в Telegram", fontWeight = FontWeight.Medium)
                     }
                 }
                 FilledTonalButton(
@@ -296,7 +355,8 @@ private fun CreateTaskBody(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !state.isSending,
-                ) { Text("Отправить в MAX (группа)") }
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("Отправить в MAX (группа)", fontWeight = FontWeight.Medium) }
 
                 FilledTonalButton(
                     onClick = {
@@ -306,23 +366,27 @@ private fun CreateTaskBody(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !state.isSending,
-                ) { Text("Отправить во ВКонтакте (стена)") }
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("Отправить во ВКонтакте (стена)", fontWeight = FontWeight.Medium) }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = onCommentOpen,
                         modifier = Modifier.weight(1f),
                         enabled = !state.isSending,
-                    ) { Text("Комментарий") }
+                        shape = MaterialTheme.shapes.medium,
+                    ) { Text("Комментарий", fontWeight = FontWeight.Medium) }
                     Button(
                         onClick = { createVm.clearQueue() },
                         modifier = Modifier.weight(1f),
                         enabled = !state.isSending,
-                    ) { Text("Очистить") }
+                        shape = MaterialTheme.shapes.medium,
+                    ) { Text("Очистить", fontWeight = FontWeight.Medium) }
                 }
                 TextButton(
                     onClick = { createVm.changeEmployee() },
                     modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
                 ) { Text("Другой сотрудник") }
 
                 state.error?.let {
@@ -342,20 +406,34 @@ private fun CreateTaskBody(
                 Text("Ошибка: не выбран номер.")
                 return
             }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("👤 Выберите вид уборки для: ${room.name} (${String.format(java.util.Locale.US, "%.2f", room.area)} м²)")
-                Divider()
-                TaskLogic.CLEANING_TYPES.forEach { (key, label) ->
-                    Button(
-                        onClick = { createVm.chooseCleaningTypeForAdd(key) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(label) }
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+                ScreenWelcomeStrip(
+                    title = "Вид уборки",
+                    subtitle = "${room.name} · ${String.format(java.util.Locale.US, "%.2f", room.area)} м²",
+                )
+                SectionGroupCard(title = "Варианты") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TaskLogic.CLEANING_TYPES.forEach { (key, label) ->
+                            Button(
+                                onClick = { createVm.chooseCleaningTypeForAdd(key) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.medium,
+                            ) { Text(label, fontWeight = FontWeight.Medium) }
+                        }
+                    }
                 }
-                Button(
+                OutlinedButton(
                     onClick = { createVm.cancelAddFlow() },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("🔙 Отмена") }
-                state.error?.let { Text("Ошибка: $it") }
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("Отмена") }
+                state.error?.let {
+                    Text(
+                        "Ошибка: $it",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
 
@@ -368,38 +446,39 @@ private fun CreateTaskBody(
                 return
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "Комплектация белья",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    room.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+                ScreenWelcomeStrip(
+                    title = "Комплектация белья",
+                    subtitle = room.name,
                 )
                 if (linenProfile == "floor4") {
-                    Text(
-                        "Для номеров 4 этажа комплект выбирается сразу после вида уборки. Если вы здесь — отмените и начните снова.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    TextButton(onClick = { createVm.cancelLinenVariantFlow() }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Отмена")
+                    SectionGroupCard(title = "Другой порядок шагов") {
+                        Text(
+                            "Для номеров 4 этажа комплект выбирается сразу после вида уборки. Если вы здесь — отмените и начните снова.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 } else {
-                    for (v in 1..4) {
-                        LinenVariantCard(
-                            title = TaskLogic.classicLinenVariantButtonTitle(v),
-                            subtitle = TaskLogic.classicLinenVariantButtonSubtitle(v),
-                            onClick = { createVm.chooseLinenVariant(v) },
-                        )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (v in 1..4) {
+                            LinenVariantCard(
+                                title = TaskLogic.classicLinenVariantButtonTitle(v),
+                                subtitle = TaskLogic.classicLinenVariantButtonSubtitle(v),
+                                onClick = { createVm.chooseLinenVariant(v) },
+                            )
+                        }
                     }
                 }
 
-                TextButton(onClick = { createVm.cancelLinenVariantFlow() }, modifier = Modifier.fillMaxWidth()) { Text("Отмена") }
-                state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                OutlinedButton(
+                    onClick = { createVm.cancelLinenVariantFlow() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("Отмена") }
+                state.error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                }
             }
         }
 
@@ -412,27 +491,37 @@ private fun CreateTaskBody(
                 return
             }
             val perBedFlow = pending.linenProfile == "floor4" && variant == TaskLogic.LINEN_VARIANT_FLOOR4_PER_BED
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "Цвет белья",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
+            val variantLine =
+                if (perBedFlow) "комплект на кровать" else TaskLogic.floor4LinenVariantButtonTitle(variant)
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+                ScreenWelcomeStrip(
+                    title = "Цвет белья",
+                    subtitle = "${room.name} · $variantLine",
                 )
-                Text(
-                    "${room.name} · ${if (perBedFlow) "комплект на кровать" else TaskLogic.floor4LinenVariantButtonTitle(variant)}",
-                )
-                Divider()
-                val keys = if (perBedFlow) TaskLogic.LINEN_COLOR_ORDER_FLOOR4_PER_BED else listOf("blue", "gray", "stripe", "white")
-                for (key in keys) {
-                    val label = TaskLogic.LINEN_COLORS[key] ?: key
-                    Button(onClick = { createVm.chooseLinenColor(key) }, modifier = Modifier.fillMaxWidth()) { Text(label) }
+                val keys =
+                    if (perBedFlow) TaskLogic.LINEN_COLOR_ORDER_FLOOR4_PER_BED
+                    else listOf("blue", "gray", "stripe", "white")
+                SectionGroupCard(title = "Оттенок комплекта") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (key in keys) {
+                            val label = TaskLogic.LINEN_COLORS[key] ?: key
+                            Button(
+                                onClick = { createVm.chooseLinenColor(key) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.medium,
+                            ) {
+                                Text(label, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
                 }
-                TextButton(
+                OutlinedButton(
                     onClick = {
                         if (perBedFlow) createVm.cancelAddFlow()
                         else createVm.cancelToLinenVariantFromColor()
                     },
                     modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
                 ) {
                     Text(if (perBedFlow) "Отмена" else "Назад к вариантам")
                 }
@@ -446,26 +535,37 @@ private fun CreateTaskBody(
                 Text("Ошибка: не выбран номер.")
                 return
             }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "Кровати в ${room.name}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+                ScreenWelcomeStrip(
+                    title = "Кровати в номере",
+                    subtitle = room.name,
                 )
-                Text(
-                    "Выберите расположение — от этого зависит комплект белья.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Button(
-                    onClick = { createVm.recordManualFloor4Layout(joined = true) },
+                SectionGroupCard(title = "Расположение") {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            "От выбора зависит комплект белья.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { createVm.recordManualFloor4Layout(joined = true) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.medium,
+                            ) { Text("Соединены", fontWeight = FontWeight.Medium) }
+                            Button(
+                                onClick = { createVm.recordManualFloor4Layout(joined = false) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.medium,
+                            ) { Text("Разъединены", fontWeight = FontWeight.Medium) }
+                        }
+                    }
+                }
+                OutlinedButton(
+                    onClick = { createVm.cancelAddFlow() },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Соединены") }
-                Button(
-                    onClick = { createVm.recordManualFloor4Layout(joined = false) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Разъединены") }
-                TextButton(onClick = { createVm.cancelAddFlow() }, modifier = Modifier.fillMaxWidth()) { Text("Отмена") }
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("Отмена") }
             }
         }
 
@@ -478,26 +578,32 @@ private fun CreateTaskBody(
                 return
             }
             val maxB = pending.floor4MaxBeds.coerceIn(1, 20)
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "Сколько кроватей застелить?",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+                ScreenWelcomeStrip(
+                    title = "Сколько кроватей застелить?",
+                    subtitle = "${room.name} · ${TaskLogic.formatLinenColor(color)} · до $maxB кров.",
                 )
-                Text(
-                    "${room.name} · бельё: ${TaskLogic.formatLinenColor(color)} · до $maxB кров.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                for (b in 1..maxB) {
-                    Button(
-                        onClick = { createVm.setFloor4BedsCount(b) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("$b ${if (b == 1) "кровать" else "кровати"}") }
+                SectionGroupCard(title = "Выбор") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (b in 1..maxB) {
+                            Button(
+                                onClick = { createVm.setFloor4BedsCount(b) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.medium,
+                            ) {
+                                Text(
+                                    "$b ${if (b == 1) "кровать" else "кровати"}",
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                        }
+                    }
                 }
-                TextButton(onClick = { createVm.cancelFloor4BedsToColor() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Назад к цвету")
-                }
+                OutlinedButton(
+                    onClick = { createVm.cancelFloor4BedsToColor() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("Назад к цвету") }
             }
         }
 
@@ -508,32 +614,42 @@ private fun CreateTaskBody(
                 Text("Ошибка: не выбран номер.")
                 return
             }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("Вариант 2 — кровати разъединены.\nНомер ${room.name}\n\nСколько кроватей застелить?")
-                Button(onClick = { createVm.setVariant2Beds(1) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("1 кровать (белья в 2 раза меньше)")
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+                ScreenWelcomeStrip(
+                    title = "Вариант 2 — кровати разъединены",
+                    subtitle = "${room.name}. Сколько кроватей застелить?",
+                )
+                SectionGroupCard(title = "Вариант") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { createVm.setVariant2Beds(1) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                        ) {
+                            Text("1 кровать (белья в 2 раза меньше)", fontWeight = FontWeight.Medium)
+                        }
+                        Button(
+                            onClick = { createVm.setVariant2Beds(2) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                        ) {
+                            Text("2 кровати (полный комплект)", fontWeight = FontWeight.Medium)
+                        }
+                    }
                 }
-                Button(onClick = { createVm.setVariant2Beds(2) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("2 кровати (полный комплект)")
-                }
-                Button(
+                OutlinedButton(
                     onClick = { createVm.cancelToLinenVariantsFromBeds() },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("🔙 Назад к вариантам") }
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("Назад к вариантам") }
             }
         }
 
         CreateTaskViewModel.Step.BnovoChooseFloor -> {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "Автозадание на завтра",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    "Список формируется по бронированиям Bnovo на завтра в порядке помещений этажа.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+                ScreenWelcomeStrip(
+                    title = "Автозадание на завтра",
+                    subtitle = "Список по бронированиям Bnovo на завтра",
                 )
                 Button(
                     onClick = {
@@ -542,7 +658,8 @@ private fun CreateTaskBody(
                         createVm.loadBnovoAndPlan(id, key, AutoTaskFromBnovo.FloorChoice.First)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("1 этаж — загрузить брони") }
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("1 этаж — загрузить брони", fontWeight = FontWeight.Medium) }
                 Button(
                     onClick = {
                         val id = authVm.bnovoAccountId.value.orEmpty()
@@ -550,22 +667,50 @@ private fun CreateTaskBody(
                         createVm.loadBnovoAndPlan(id, key, AutoTaskFromBnovo.FloorChoice.Fourth)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("4 этаж — загрузить брони") }
-                TextButton(onClick = { createVm.cancelBnovoWizard() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Отмена")
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("4 этаж — загрузить брони", fontWeight = FontWeight.Medium) }
+                OutlinedButton(
+                    onClick = { createVm.cancelBnovoWizard() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("Отмена") }
+                state.error?.let {
+                    Text(
+                        it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
-                state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         }
 
         CreateTaskViewModel.Step.BnovoLoading -> {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+            val scheme = MaterialTheme.colorScheme
+            Card(
                 modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                colors = CardDefaults.cardColors(containerColor = scheme.surface),
+                border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.45f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             ) {
-                Text("Запрос к Bnovo…", style = MaterialTheme.typography.titleMedium)
-                CircularProgressIndicator(modifier = Modifier.height(36.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        "Запрос к Bnovo…",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    CircularProgressIndicator(
+                        modifier = Modifier.height(36.dp),
+                        color = scheme.primary,
+                        strokeWidth = 3.dp,
+                    )
+                }
             }
         }
 
@@ -578,98 +723,131 @@ private fun CreateTaskBody(
                 return
             }
             val n = steps.size
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    when (step) {
-                        is AutoTaskFromBnovo.BnovoWizardStep.Floor4PerBed -> "Бельё 4 этажа (цвет и кровати)"
-                        else -> "Расположение кроватей"
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
+            val titleName = when (step) {
+                is AutoTaskFromBnovo.BnovoWizardStep.ClassicBeds -> step.planned.entity.name
+                is AutoTaskFromBnovo.BnovoWizardStep.Floor4Layout -> step.planned.entity.name
+                is AutoTaskFromBnovo.BnovoWizardStep.Floor4PerBed -> step.planned.entity.name
+            }
+            val stripTitle = when (step) {
+                is AutoTaskFromBnovo.BnovoWizardStep.Floor4PerBed -> "Бельё 4 этажа"
+                else -> "Расположение кроватей"
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+                ScreenWelcomeStrip(
+                    title = stripTitle,
+                    subtitle = "Шаг ${idx + 1} из $n · $titleName",
                 )
-                val titleName = when (step) {
-                    is AutoTaskFromBnovo.BnovoWizardStep.ClassicBeds -> step.planned.entity.name
-                    is AutoTaskFromBnovo.BnovoWizardStep.Floor4Layout -> step.planned.entity.name
-                    is AutoTaskFromBnovo.BnovoWizardStep.Floor4PerBed -> step.planned.entity.name
-                }
-                Text(
-                    "Шаг ${idx + 1} из $n: $titleName",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-
                 when (step) {
                     is AutoTaskFromBnovo.BnovoWizardStep.ClassicBeds -> {
-                        Text(
-                            "Выберите вариант для комплекта белья (1 этаж).",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Button(
-                            onClick = { createVm.recordBnovoLayoutChoice(joined = true, splitBedsForClassic = 2) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Соединены") }
-                        Button(
-                            onClick = { createVm.recordBnovoLayoutChoice(joined = false, splitBedsForClassic = 2) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Разъединены — 2 кровати") }
-                        Button(
-                            onClick = { createVm.recordBnovoLayoutChoice(joined = false, splitBedsForClassic = 1) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Разъединены — 1 кровать") }
+                        SectionGroupCard(title = "Комплект (1 этаж)") {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    "Выберите вариант комплекта белья.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        onClick = { createVm.recordBnovoLayoutChoice(joined = true, splitBedsForClassic = 2) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = MaterialTheme.shapes.medium,
+                                    ) { Text("Соединены", fontWeight = FontWeight.Medium) }
+                                    Button(
+                                        onClick = { createVm.recordBnovoLayoutChoice(joined = false, splitBedsForClassic = 2) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = MaterialTheme.shapes.medium,
+                                    ) { Text("Разъединены — 2 кровати", fontWeight = FontWeight.Medium) }
+                                    Button(
+                                        onClick = { createVm.recordBnovoLayoutChoice(joined = false, splitBedsForClassic = 1) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = MaterialTheme.shapes.medium,
+                                    ) { Text("Разъединены — 1 кровать", fontWeight = FontWeight.Medium) }
+                                }
+                            }
+                        }
                     }
                     is AutoTaskFromBnovo.BnovoWizardStep.Floor4Layout -> {
-                        Text(
-                            "Соединённые — двуспальная простыня; разъединённые — два комплекта 1,5 спальни.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Button(
-                            onClick = { createVm.recordBnovoLayoutChoice(joined = true, splitBedsForClassic = 2) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Соединены") }
-                        Button(
-                            onClick = { createVm.recordBnovoLayoutChoice(joined = false, splitBedsForClassic = 2) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Разъединены") }
+                        SectionGroupCard(title = "Расположение") {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    "Соединённые — двуспальная простыня; разъединённые — два комплекта 1,5 спальни.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        onClick = { createVm.recordBnovoLayoutChoice(joined = true, splitBedsForClassic = 2) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = MaterialTheme.shapes.medium,
+                                    ) { Text("Соединены", fontWeight = FontWeight.Medium) }
+                                    Button(
+                                        onClick = { createVm.recordBnovoLayoutChoice(joined = false, splitBedsForClassic = 2) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = MaterialTheme.shapes.medium,
+                                    ) { Text("Разъединены", fontWeight = FontWeight.Medium) }
+                                }
+                            }
+                        }
                     }
                     is AutoTaskFromBnovo.BnovoWizardStep.Floor4PerBed -> {
                         val draft = state.bnovoPerBedColorDraft
                         if (draft == null) {
-                            Text(
-                                "Цвет комплекта (на каждую выбранную кровать). Ёмкость номера по Bnovo — до ${step.maxBeds} кров.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            for (key in TaskLogic.LINEN_COLOR_ORDER_FLOOR4_PER_BED) {
-                                val label = TaskLogic.LINEN_COLORS[key] ?: key
-                                Button(
-                                    onClick = { createVm.recordBnovoPerBedColor(key) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) { Text(label) }
+                            SectionGroupCard(title = "Цвет комплекта") {
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text(
+                                        "На каждую выбранную кровать. Ёмкость по Bnovo — до ${step.maxBeds} кров.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        for (key in TaskLogic.LINEN_COLOR_ORDER_FLOOR4_PER_BED) {
+                                            val label = TaskLogic.LINEN_COLORS[key] ?: key
+                                            Button(
+                                                onClick = { createVm.recordBnovoPerBedColor(key) },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = MaterialTheme.shapes.medium,
+                                            ) { Text(label, fontWeight = FontWeight.Medium) }
+                                        }
+                                    }
+                                }
                             }
                         } else {
-                            Text(
-                                "Цвет: ${TaskLogic.formatLinenColor(draft)}. Сколько кроватей застелить?",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            for (b in 1..step.maxBeds) {
-                                Button(
-                                    onClick = { createVm.recordBnovoPerBedBedsCount(b) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) { Text("$b ${if (b == 1) "кровать" else "кровати"}") }
+                            SectionGroupCard(title = "Число кроватей") {
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text(
+                                        "Цвет: ${TaskLogic.formatLinenColor(draft)}. Сколько кроватей застелить?",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        for (b in 1..step.maxBeds) {
+                                            Button(
+                                                onClick = { createVm.recordBnovoPerBedBedsCount(b) },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = MaterialTheme.shapes.medium,
+                                            ) {
+                                                Text(
+                                                    "$b ${if (b == 1) "кровать" else "кровати"}",
+                                                    fontWeight = FontWeight.Medium,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            TextButton(
+                            OutlinedButton(
                                 onClick = { createVm.cancelBnovoPerBedColorDraft() },
                                 modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.medium,
                             ) { Text("Назад к цвету") }
                         }
                     }
                 }
-                TextButton(onClick = { createVm.cancelBnovoWizard() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Отмена")
-                }
+                OutlinedButton(
+                    onClick = { createVm.cancelBnovoWizard() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("Отмена") }
             }
         }
 
@@ -680,43 +858,78 @@ private fun CreateTaskBody(
                 return
             }
             val item = state.selectedRooms[idx]
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("Вид уборки для: ${item.name}")
-                Divider()
-                TaskLogic.CLEANING_TYPES.forEach { (key, label) ->
-                    Button(
-                        onClick = { createVm.chooseCleaningTypeForQueueItem(key) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(label) }
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+                ScreenWelcomeStrip(
+                    title = "Смена вида уборки",
+                    subtitle = item.name,
+                )
+                SectionGroupCard(title = "Варианты") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TaskLogic.CLEANING_TYPES.forEach { (key, label) ->
+                            Button(
+                                onClick = { createVm.chooseCleaningTypeForQueueItem(key) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.medium,
+                            ) { Text(label, fontWeight = FontWeight.Medium) }
+                        }
+                    }
                 }
-                Button(
+                OutlinedButton(
                     onClick = { createVm.cancelQueueChangeCleaningType() },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("🔙 Назад") }
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("Назад") }
             }
         }
 
         CreateTaskViewModel.Step.AfterSent -> {
             val empName = TaskLogic.formatEmployeeName(state.currentEmployeeKey)
             val total0 = state.lastSentTotalArea?.let { round(it).toInt() }
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("Готово", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                when (state.lastSentChannel) {
-                    "max" -> Text("Задание для $empName отправлено в MAX (группа).")
-                    "vk" -> Text("Задание для $empName отправлено во ВКонтакте (стена группы).")
-                    else -> Text("Задание для $empName отправлено в Telegram-канал.")
+            val channelLine = when (state.lastSentChannel) {
+                "max" -> "Задание для $empName отправлено в MAX (группа)."
+                "vk" -> "Задание для $empName отправлено во ВКонтакте (стена группы)."
+                else -> "Задание для $empName отправлено в Telegram-канал."
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+                ScreenWelcomeStrip(
+                    title = "Готово",
+                    subtitle = "Задание ушло в канал",
+                )
+                SectionGroupCard(title = "Итог") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            channelLine,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (total0 != null) {
+                            Text(
+                                "Общая площадь: $total0 м²",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
-                if (total0 != null) {
-                    Text("Общая площадь: $total0 м²")
+                Button(
+                    onClick = { createVm.startNewTask() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Text("Создать новое задание", fontWeight = FontWeight.Medium)
                 }
-
-                Button(onClick = { createVm.startNewTask() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Создать новое задание")
+                FilledTonalButton(
+                    onClick = onGoToHistory,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Text("История", fontWeight = FontWeight.Medium)
                 }
-                FilledTonalButton(onClick = onGoToHistory, modifier = Modifier.fillMaxWidth()) {
-                    Text("История")
-                }
-                TextButton(onClick = onBackToMenu, modifier = Modifier.fillMaxWidth()) { Text("В меню") }
+                TextButton(
+                    onClick = onBackToMenu,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("В меню") }
             }
         }
     }
@@ -728,14 +941,17 @@ private fun LinenVariantCard(
     subtitle: String,
     onClick: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+            containerColor = scheme.surface,
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
             Modifier.padding(14.dp),
@@ -785,21 +1001,58 @@ private fun QueueRow(
         else -> ""
     }
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    val scheme = MaterialTheme.colorScheme
+    Card(
         modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = scheme.surface),
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.4f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text("${idx + 1}. ${item.name} — ${TaskLogic.formatArea(item.area)} м² ($ct)$suffix", maxLines = 2)
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            TextButton(onClick = onUp) { Text("⬆️") }
-            TextButton(onClick = onDown) { Text("⬇️") }
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            TextButton(onClick = onChangeType) { Text("🔄") }
-            TextButton(onClick = onDelete) { Text("❌") }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "${idx + 1}. ${item.name}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                )
+                Text(
+                    "${TaskLogic.formatArea(item.area)} м² · $ct$suffix",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 3,
+                )
+            }
+            Column(
+                verticalArrangement = Arrangement.spacedBy(0.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                IconButton(onClick = onUp, modifier = Modifier.height(40.dp)) {
+                    Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Выше")
+                }
+                IconButton(onClick = onDown, modifier = Modifier.height(40.dp)) {
+                    Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "Ниже")
+                }
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(onClick = onChangeType) {
+                    Icon(Icons.Outlined.Edit, contentDescription = "Вид уборки")
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Outlined.DeleteOutline,
+                        contentDescription = "Удалить",
+                        tint = scheme.error,
+                    )
+                }
+            }
         }
     }
 }

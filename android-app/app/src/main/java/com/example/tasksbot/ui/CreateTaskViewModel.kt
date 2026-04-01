@@ -655,7 +655,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             try {
                 val total = queueTotalArea()
-                val saved = tasksRepo.sendTaskAndSave(
+                tasksRepo.sendTaskAndSave(
                     botToken = botToken,
                     channelId = channelId,
                     employeeKey = current.currentEmployeeKey,

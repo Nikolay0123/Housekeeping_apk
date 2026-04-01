@@ -64,7 +64,7 @@ object AutoTaskFromBnovo {
         "Номер 405.1", "Номер 405.2", "Номер 405.3", "Номер 405.4",
         "Блок 401", "Блок 402", "Кухня блока 401,402",
         "Блок 404", "Блок 405", "Кухня блока 404,405",
-        "Холл 4 этаж", "Лестница до 5 этажа", "Арендаторы 2 этаж", "Входная группа",
+        "Холл 4 этаж", "Лестница до 5 этажа",
     )
 
     fun tomorrowCleaningDate(): LocalDate = LocalDate.now().plusDays(1)
@@ -131,7 +131,6 @@ object AutoTaskFromBnovo {
         for (name in roomNames) {
             val ent = activeRoomsByName[name] ?: continue
             val key = cleaningTypeForRoom(
-                roomName = name,
                 bookings = bookingsByRoom[name].orEmpty(),
                 cleaningDate = cleaningDate,
             ) ?: continue
@@ -335,7 +334,6 @@ object AutoTaskFromBnovo {
      * Выезд только при `departure == C` (не `C−1`: иначе вчерашний выезд ошибочно давал «выезд» на завтра).
      */
     internal fun cleaningTypeForRoom(
-        roomName: String,
         bookings: List<BnovoClient.NormalizedBooking>,
         cleaningDate: LocalDate,
     ): String? {

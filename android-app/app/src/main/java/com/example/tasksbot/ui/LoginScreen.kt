@@ -3,9 +3,12 @@ package com.example.tasksbot.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.tasksbot.ui.components.ScreenWelcomeStrip
+import com.example.tasksbot.ui.components.SectionGroupCard
 
 @Composable
 fun LoginScreen(
@@ -30,57 +35,55 @@ fun LoginScreen(
     val authVm: AuthViewModel = viewModel()
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    val scroll = rememberScrollState()
 
     Column(
         modifier = Modifier
-            .padding(horizontal = 24.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .fillMaxSize()
+            .verticalScroll(scroll)
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(
-            text = "Вход",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground,
+        ScreenWelcomeStrip(
+            title = "Вход",
+            subtitle = "Введите PIN начальника",
         )
-        Text(
-            text = "Введите PIN начальника",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+        SectionGroupCard(title = "Авторизация") {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { pin = it },
+                    label = { Text("PIN") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                )
 
-        OutlinedTextField(
-            value = pin,
-            onValueChange = { pin = it },
-            label = { Text("PIN") },
-            visualTransformation = PasswordVisualTransformation(),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-        )
-
-        error?.let {
-            Text(
-                text = it,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-
-        Button(
-            onClick = {
-                error = null
-                val ok = authVm.login(pin)
-                if (!ok) {
-                    error = "Неверный PIN."
-                    return@Button
+                error?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
-                onLoggedIn()
-            },
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-        ) {
-            Text("Войти")
+
+                Button(
+                    onClick = {
+                        error = null
+                        val ok = authVm.login(pin)
+                        if (!ok) {
+                            error = "Неверный PIN."
+                            return@Button
+                        }
+                        onLoggedIn()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Text("Войти", fontWeight = FontWeight.Medium)
+                }
+            }
         }
 
         FilledTonalButton(
@@ -90,5 +93,7 @@ fun LoginScreen(
         ) {
             Text("Сбросить настройки")
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
     }
 }
