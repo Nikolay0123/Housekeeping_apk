@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -27,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
@@ -54,6 +56,7 @@ import com.example.tasksbot.domain.QueueItem
 import com.example.tasksbot.domain.TaskLogic
 import com.example.tasksbot.db.RoomEntity
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.round
 
 @Composable
@@ -78,7 +81,7 @@ fun CreateTaskScreen(
         topBar = {
             StandardTopBar(
                 title = "Новое задание",
-                subtitle = "Очередь и отправка в канал",
+                subtitle = "Очередь и отправка в каналы",
                 onNavigateBack = onBackToMenu,
             )
         },
@@ -153,6 +156,11 @@ private fun CreateTaskBody(
 ) {
     when (state.step) {
         CreateTaskViewModel.Step.ChooseEmployee -> {
+            var addDialogOpen by remember { mutableStateOf(false) }
+            var draftName by remember { mutableStateOf("") }
+            var draftKey by remember { mutableStateOf("") }
+            val schemeEmp = MaterialTheme.colorScheme
+
             Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
                 ScreenWelcomeStrip(
                     title = "Исполнитель",
@@ -161,31 +169,153 @@ private fun CreateTaskBody(
                 SectionGroupCard(title = "Сотрудник") {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            "Выберите имя:",
+                            "Выберите из списка или добавьте нового:",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = schemeEmp.onSurfaceVariant,
                         )
-                        Button(
-                            onClick = { createVm.selectEmployee("dina") },
+                        if (state.employees.isEmpty()) {
+                            Text(
+                                "Загрузка списка…",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = schemeEmp.onSurfaceVariant,
+                            )
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                state.employees.forEach { emp ->
+                                    OutlinedCard(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { createVm.selectEmployee(emp.key) },
+                                        shape = MaterialTheme.shapes.medium,
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    emp.displayName,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                )
+                                                Text(
+                                                    "Код: ${emp.key}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = schemeEmp.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = { createVm.deleteEmployee(emp.id) },
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.DeleteOutline,
+                                                    contentDescription = "Удалить",
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                draftName = ""
+                                draftKey = ""
+                                addDialogOpen = true
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             shape = MaterialTheme.shapes.medium,
-                        ) { Text("Дина", fontWeight = FontWeight.Medium) }
-                        Button(
-                            onClick = { createVm.selectEmployee("lena") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.medium,
-                        ) { Text("Лена", fontWeight = FontWeight.Medium) }
-                        Button(
-                            onClick = { createVm.selectEmployee("olya") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.medium,
-                        ) { Text("Оля", fontWeight = FontWeight.Medium) }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.PersonAdd,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 8.dp),
+                            )
+                            Text("Добавить сотрудника", fontWeight = FontWeight.Medium)
+                        }
                     }
+                }
+                state.error?.let {
+                    Text(
+                        it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
                 TextButton(
                     onClick = { onBackToMenu() },
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 ) { Text("Назад в меню") }
+            }
+
+            if (addDialogOpen) {
+                AlertDialog(
+                    onDismissRequest = { addDialogOpen = false },
+                    shape = MaterialTheme.shapes.extraLarge,
+                    containerColor = schemeEmp.surface,
+                    titleContentColor = schemeEmp.onSurface,
+                    textContentColor = schemeEmp.onSurfaceVariant,
+                    title = {
+                        Text(
+                            "Новый сотрудник",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedTextField(
+                                value = draftName,
+                                onValueChange = { draftName = it },
+                                label = { Text("Имя в отчётах и канале") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.medium,
+                                singleLine = true,
+                            )
+                            OutlinedTextField(
+                                value = draftKey,
+                                onValueChange = { s ->
+                                    draftKey = s.filter { c ->
+                                        c in 'a'..'z' || c in 'A'..'Z' || c.isDigit() || c == '_'
+                                    }
+                                },
+                                label = { Text("Код (латиница, по желанию)") },
+                                placeholder = { Text("Пусто — создать автоматически") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.medium,
+                                singleLine = true,
+                            )
+                            Text(
+                                "Код: 2–40 символов a–z, 0–9 и «_». Если оставить пустым, приложение сгенерирует само.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = schemeEmp.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val nameTrim = draftName.trim()
+                                if (nameTrim.isNotEmpty()) {
+                                    createVm.addEmployee(nameTrim, draftKey.ifBlank { null })
+                                    addDialogOpen = false
+                                }
+                            },
+                            shape = MaterialTheme.shapes.medium,
+                        ) { Text("Добавить", fontWeight = FontWeight.Medium) }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { addDialogOpen = false },
+                            shape = MaterialTheme.shapes.medium,
+                        ) { Text("Отмена") }
+                    },
+                )
             }
         }
 
@@ -195,19 +325,24 @@ private fun CreateTaskBody(
             val taskDateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy")
             var roomTab by remember { mutableStateOf(TaskLogic.RoomPickerTab.Floor1) }
             val tabRows = TaskLogic.RoomPickerTab.entries
-            val tabLabel: (TaskLogic.RoomPickerTab) -> String = {
+            val tabLabelShort: (TaskLogic.RoomPickerTab) -> String = {
                 when (it) {
-                    TaskLogic.RoomPickerTab.Floor1 -> "1 этаж\n101–109"
-                    TaskLogic.RoomPickerTab.Block404405 -> "4 этаж\nномера, блоки, холл"
+                    TaskLogic.RoomPickerTab.Floor1 -> "1 этаж"
+                    TaskLogic.RoomPickerTab.Block404405 -> "4 этаж"
                     TaskLogic.RoomPickerTab.Other -> "Помещения"
                 }
+            }
+            val tabHint = when (roomTab) {
+                TaskLogic.RoomPickerTab.Floor1 -> "Номера 101–109 и помещения, закреплённые за 1 этажом"
+                TaskLogic.RoomPickerTab.Block404405 -> "401–405, блоки, холл, лестница"
+                TaskLogic.RoomPickerTab.Other -> "Кабинеты, арендаторы, кухни и прочее"
             }
 
             val schemeRooms = MaterialTheme.colorScheme
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = schemeRooms.primaryContainer.copy(alpha = 0.45f),
+                        containerColor = schemeRooms.surfaceContainerLow,
                     ),
                     shape = MaterialTheme.shapes.medium,
                     border = BorderStroke(1.dp, schemeRooms.outlineVariant.copy(alpha = 0.35f)),
@@ -215,7 +350,7 @@ private fun CreateTaskBody(
                 ) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
-                            TaskLogic.formatEmployeeName(state.currentEmployeeKey),
+                            TaskLogic.formatEmployeeName(state.currentEmployeeKey, state.employeeNameByKey),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -233,11 +368,12 @@ private fun CreateTaskBody(
                     }
                 }
 
-                FilledTonalButton(
+                OutlinedButton(
                     onClick = { createVm.startBnovoWizard() },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !state.isSending,
                     shape = MaterialTheme.shapes.medium,
+                    border = BorderStroke(1.dp, schemeRooms.primary.copy(alpha = 0.45f)),
                 ) { Text("Сформировать на завтра (Bnovo)", fontWeight = FontWeight.Medium) }
 
                 Text("Очередь уборки", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
@@ -278,7 +414,7 @@ private fun CreateTaskBody(
                         ScrollableTabRow(
                             selectedTabIndex = tabRows.indexOf(roomTab).coerceIn(0, tabRows.lastIndex),
                             edgePadding = 0.dp,
-                            containerColor = schemeRooms.surfaceVariant.copy(alpha = 0.4f),
+                            containerColor = schemeRooms.surfaceVariant.copy(alpha = 0.35f),
                             contentColor = schemeRooms.onSurface,
                         ) {
                             tabRows.forEach { tab ->
@@ -287,14 +423,21 @@ private fun CreateTaskBody(
                                     onClick = { roomTab = tab },
                                     text = {
                                         Text(
-                                            tabLabel(tab),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            maxLines = 2,
+                                            tabLabelShort(tab),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                         )
                                     },
                                 )
                             }
                         }
+                        Text(
+                            tabHint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = schemeRooms.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                        )
                         val filtered = TaskLogic.sortRoomsForPicker(
                             state.activeRooms.filter { TaskLogic.roomPickerTab(it.name) == roomTab },
                         )
@@ -305,20 +448,47 @@ private fun CreateTaskBody(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         } else {
-                            filtered.forEach { room ->
-                                val inSelected = selectedIds.contains(room.id)
-                                val areaText = String.format(java.util.Locale.US, "%.2f", room.area)
-                                val suffix = if (inSelected) " ✓ в очереди" else ""
-                                FilledTonalButton(
-                                    onClick = { createVm.addRoomStart(room) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = MaterialTheme.shapes.medium,
-                                ) {
-                                    Text(
-                                        "${room.name} ($areaText м²)$suffix",
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                filtered.forEach { room ->
+                                    val inSelected = selectedIds.contains(room.id)
+                                    val areaText = String.format(Locale.US, "%.2f", room.area)
+                                    OutlinedCard(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { createVm.addRoomStart(room) },
+                                        shape = MaterialTheme.shapes.medium,
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    room.name,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                                Text(
+                                                    "$areaText м² · нажмите, чтобы добавить в очередь",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = schemeRooms.onSurfaceVariant,
+                                                )
+                                            }
+                                            if (inSelected) {
+                                                Text(
+                                                    "В очереди",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = schemeRooms.primary,
+                                                    fontWeight = FontWeight.Medium,
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -883,7 +1053,7 @@ private fun CreateTaskBody(
         }
 
         CreateTaskViewModel.Step.AfterSent -> {
-            val empName = TaskLogic.formatEmployeeName(state.currentEmployeeKey)
+            val empName = TaskLogic.formatEmployeeName(state.currentEmployeeKey, state.employeeNameByKey)
             val total0 = state.lastSentTotalArea?.let { round(it).toInt() }
             val channelLine = when (state.lastSentChannel) {
                 "max" -> "Задание для $empName отправлено в MAX (группа)."

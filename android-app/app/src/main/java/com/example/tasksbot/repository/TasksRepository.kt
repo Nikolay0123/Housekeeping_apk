@@ -34,13 +34,21 @@ class TasksRepository(
         totalArea: Double,
         comment: String?,
         taskForDate: LocalDate? = null,
+        employeeDisplayNames: Map<String, String> = emptyMap(),
     ): SavedTask {
         val createdAt = System.currentTimeMillis()
         val roomsJson = gson.toJson(queue)
         val msgId = telegramClient.sendMessage(
             botToken,
             channelId,
-            text = buildMessage(employeeKey, queue, totalArea, comment, taskForDate),
+            text = buildMessage(
+                employeeKey,
+                queue,
+                totalArea,
+                comment,
+                taskForDate,
+                employeeDisplayNames,
+            ),
         )
         val task = TaskEntity(
             createdAtEpochMillis = createdAt,
@@ -80,12 +88,14 @@ class TasksRepository(
         totalArea: Double,
         comment: String?,
         taskForDate: LocalDate? = null,
+        employeeDisplayNames: Map<String, String> = emptyMap(),
     ): String = TaskLogic.formatChannelMessage(
         employeeKey = employeeKey,
         queue = queue,
         totalArea = totalArea,
         comment = comment,
         taskForDate = taskForDate,
+        employeeDisplayNames = employeeDisplayNames,
     )
 
     private fun buildMessage(
@@ -94,6 +104,7 @@ class TasksRepository(
         totalArea: Double,
         comment: String?,
         taskForDate: LocalDate? = null,
+        employeeDisplayNames: Map<String, String> = emptyMap(),
     ): String {
         return TaskLogic.formatChannelMessage(
             employeeKey = employeeKey,
@@ -101,6 +112,7 @@ class TasksRepository(
             totalArea = totalArea,
             comment = comment,
             taskForDate = taskForDate,
+            employeeDisplayNames = employeeDisplayNames,
         )
     }
 

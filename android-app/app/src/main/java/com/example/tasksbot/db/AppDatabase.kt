@@ -8,13 +8,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [RoomEntity::class, TaskEntity::class],
-    version = 2,
+    entities = [RoomEntity::class, TaskEntity::class, EmployeeEntity::class],
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun roomDao(): RoomDao
     abstract fun taskDao(): TaskDao
+    abstract fun employeeDao(): EmployeeDao
 
     companion object {
         @Volatile
@@ -36,6 +37,29 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS employees (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "employee_key TEXT NOT NULL, " +
+                        "display_name TEXT NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_employees_employee_key ON employees(employee_key)",
+                )
+                db.execSQL(
+                    "INSERT INTO employees (employee_key, display_name) VALUES ('dina', 'ДИНА')",
+                )
+                db.execSQL(
+                    "INSERT INTO employees (employee_key, display_name) VALUES ('lena', 'ЛЕНА')",
+                )
+                db.execSQL(
+                    "INSERT INTO employees (employee_key, display_name) VALUES ('olya', 'ОЛЯ')",
+                )
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -43,7 +67,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tasksbot.db",
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { INSTANCE = it }
             }

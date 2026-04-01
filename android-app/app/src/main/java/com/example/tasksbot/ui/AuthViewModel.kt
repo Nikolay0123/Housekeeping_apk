@@ -90,6 +90,26 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         repo.setBnovoCredentials(accountId, apiKey)
     }
 
+    suspend fun saveMessengerIntegration(
+        botToken: String,
+        channelId: String,
+        channelLink: String?,
+        maxBotToken: String,
+        maxChatId: String,
+        vkAccessToken: String,
+        vkGroupId: String,
+    ) {
+        repo.updateMessengerIntegration(
+            botToken = botToken,
+            channelId = channelId,
+            channelLink = channelLink,
+            maxBotToken = maxBotToken,
+            maxChatId = maxChatId,
+            vkAccessToken = vkAccessToken,
+            vkGroupId = vkGroupId,
+        )
+    }
+
     suspend fun reset() {
         repo.clearAll()
         isUnlocked.value = false

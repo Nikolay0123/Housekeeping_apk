@@ -11,11 +11,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,28 +39,57 @@ import com.example.tasksbot.ui.components.StandardTopBar
 import kotlinx.coroutines.launch
 
 @Composable
-fun ChannelLinkScreen(
+fun SettingsScreen(
     onBackToMenu: () -> Unit,
 ) {
     val authVm: AuthViewModel = viewModel()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val link = authVm.channelLink.value
     val bnovoClient = remember { BnovoClient() }
 
-    var bnovoId by remember { mutableStateOf(authVm.bnovoAccountId.value ?: "") }
+    var botToken by remember { mutableStateOf("") }
+    var channelId by remember { mutableStateOf("") }
+    var channelLink by remember { mutableStateOf("") }
+    var maxBotToken by remember { mutableStateOf("") }
+    var maxChatId by remember { mutableStateOf("") }
+    var vkAccessToken by remember { mutableStateOf("") }
+    var vkGroupId by remember { mutableStateOf("") }
+
+    var bnovoId by remember { mutableStateOf("") }
     var bnovoKey by remember { mutableStateOf("") }
     var bnovoMsg by remember { mutableStateOf<String?>(null) }
+
+    var messengerMsg by remember { mutableStateOf<String?>(null) }
 
     var bnovoDiagOpen by remember { mutableStateOf(false) }
     var bnovoDiagText by remember { mutableStateOf("") }
     var bnovoDiagLoading by remember { mutableStateOf(false) }
 
+    LaunchedEffect(
+        authVm.botToken.value,
+        authVm.channelId.value,
+        authVm.channelLink.value,
+        authVm.maxBotToken.value,
+        authVm.maxChatId.value,
+        authVm.vkAccessToken.value,
+        authVm.vkGroupId.value,
+        authVm.bnovoAccountId.value,
+    ) {
+        botToken = authVm.botToken.value.orEmpty()
+        channelId = authVm.channelId.value.orEmpty()
+        channelLink = authVm.channelLink.value.orEmpty()
+        maxBotToken = authVm.maxBotToken.value.orEmpty()
+        maxChatId = authVm.maxChatId.value.orEmpty()
+        vkAccessToken = authVm.vkAccessToken.value.orEmpty()
+        vkGroupId = authVm.vkGroupId.value.orEmpty()
+        bnovoId = authVm.bnovoAccountId.value.orEmpty()
+    }
+
     Scaffold(
         topBar = {
             StandardTopBar(
-                title = "Канал и Bnovo",
-                subtitle = "Ссылка, учётные данные API, диагностика",
+                title = "Настройки",
+                subtitle = "Токены, ID каналов и Bnovo",
                 onNavigateBack = onBackToMenu,
             )
         },
@@ -72,22 +103,128 @@ fun ChannelLinkScreen(
         ) {
             ScreenWelcomeStrip(
                 title = "Интеграции",
-                subtitle = "Данные канала и тест API бронирований",
+                subtitle = "Данные хранятся только на устройстве",
             )
 
-            SectionGroupCard(title = "Ссылка на канал") {
+            SectionGroupCard(title = "Telegram") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = botToken,
+                        onValueChange = { botToken = it; messengerMsg = null },
+                        label = { Text("BOT_TOKEN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                    OutlinedTextField(
+                        value = channelId,
+                        onValueChange = { channelId = it; messengerMsg = null },
+                        label = { Text("CHANNEL_ID (например -100123…)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                    OutlinedTextField(
+                        value = channelLink,
+                        onValueChange = { channelLink = it; messengerMsg = null },
+                        label = { Text("CHANNEL_LINK (необязательно)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                }
+            }
+
+            SectionGroupCard(title = "MAX") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = maxBotToken,
+                        onValueChange = { maxBotToken = it; messengerMsg = null },
+                        label = { Text("MAX_BOT_TOKEN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                    OutlinedTextField(
+                        value = maxChatId,
+                        onValueChange = { maxChatId = it; messengerMsg = null },
+                        label = { Text("MAX_CHAT_ID") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                }
+            }
+
+            SectionGroupCard(title = "ВКонтакте") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = vkAccessToken,
+                        onValueChange = { vkAccessToken = it; messengerMsg = null },
+                        label = { Text("VK_ACCESS_TOKEN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                    OutlinedTextField(
+                        value = vkGroupId,
+                        onValueChange = { vkGroupId = it; messengerMsg = null },
+                        label = { Text("VK_GROUP_ID") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                }
+            }
+
+            Button(
+                onClick = {
+                    scope.launch {
+                        messengerMsg = null
+                        if (botToken.isBlank() || channelId.isBlank()) {
+                            messengerMsg = "Заполните BOT_TOKEN и CHANNEL_ID."
+                            return@launch
+                        }
+                        if (maxBotToken.isBlank() || maxChatId.isBlank()) {
+                            messengerMsg = "Заполните MAX_BOT_TOKEN и MAX_CHAT_ID."
+                            return@launch
+                        }
+                        if (vkAccessToken.isBlank() || vkGroupId.isBlank()) {
+                            messengerMsg = "Заполните VK_ACCESS_TOKEN и VK_GROUP_ID."
+                            return@launch
+                        }
+                        authVm.saveMessengerIntegration(
+                            botToken = botToken.trim(),
+                            channelId = channelId.trim(),
+                            channelLink = channelLink.trim().ifEmpty { null },
+                            maxBotToken = maxBotToken.trim(),
+                            maxChatId = maxChatId.trim(),
+                            vkAccessToken = vkAccessToken.trim(),
+                            vkGroupId = vkGroupId.trim(),
+                        )
+                        messengerMsg = "Сохранено."
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text("Сохранить Telegram, MAX и VK", fontWeight = FontWeight.Medium)
+            }
+            messengerMsg?.let {
                 Text(
-                    text = link ?: "(не задана в настройках)",
+                    it,
+                    color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
 
             SectionGroupCard(title = "Bnovo PMS") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        "Укажите ID аккаунта и API-ключ из раздела Bnovo Octopus → API-доступ (как в документации к API: «id» и «password»). " +
-                            "ID — обычно число с экрана доступа, без пробелов; подключение доступно владельцу аккаунта. Ключ хранится на устройстве.",
+                        "ID аккаунта и API-ключ из Bnovo Octopus → API-доступ. Ключ можно оставить пустым, чтобы не перезаписывать.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -102,7 +239,7 @@ fun ChannelLinkScreen(
                     OutlinedTextField(
                         value = bnovoKey,
                         onValueChange = { bnovoKey = it; bnovoMsg = null },
-                        label = { Text("Bnovo: API-ключ (оставьте пустым, чтобы не менять)") },
+                        label = { Text("Bnovo: API-ключ (пусто = не менять)") },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -146,7 +283,8 @@ fun ChannelLinkScreen(
                                 val keyTrim = bnovoKey.trim()
                                 val keyUse = keyTrim.ifEmpty { authVm.bnovoApiKey.value.orEmpty() }
                                 if (idTrim.isEmpty() || keyUse.isEmpty()) {
-                                    bnovoDiagText = "Сначала укажите ID и API-ключ (или введите ключ в поле выше)."
+                                    bnovoDiagText =
+                                        "Сначала укажите ID и API-ключ (или введите ключ в поле выше)."
                                     bnovoDiagLoading = false
                                     return@launch
                                 }
@@ -156,7 +294,8 @@ fun ChannelLinkScreen(
                                     return@launch
                                 }
                                 try {
-                                    bnovoDiagText = bnovoClient.runBookingsDiagnostics(idTrim, keyUse)
+                                    bnovoDiagText =
+                                        bnovoClient.runBookingsDiagnostics(idTrim, keyUse)
                                 } catch (e: Exception) {
                                     bnovoDiagText = e.message ?: "Ошибка запроса"
                                 }
@@ -167,11 +306,10 @@ fun ChannelLinkScreen(
                         shape = MaterialTheme.shapes.medium,
                         enabled = !bnovoDiagLoading,
                     ) {
-                        Text("Показать поля ответа Bnovo (/bookings)")
+                        Text("Диагностика Bnovo (/bookings)")
                     }
                     Text(
-                        "Первый запрос: auth + одна страница броней (14 дней назад — 30 вперёд). " +
-                            "В диалоге — ключи и фрагмент JSON; не публикуйте скриншоты с персональными данными гостей.",
+                        "В диалоге — фрагмент JSON; не публикуйте персональные данные гостей.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

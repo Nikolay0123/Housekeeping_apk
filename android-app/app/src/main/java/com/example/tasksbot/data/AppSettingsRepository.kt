@@ -83,6 +83,28 @@ class AppSettingsRepository(private val context: Context) {
         }
     }
 
+    /** Telegram, MAX, VK — без смены PIN и флага setup. */
+    suspend fun updateMessengerIntegration(
+        botToken: String,
+        channelId: String,
+        channelLink: String?,
+        maxBotToken: String,
+        maxChatId: String,
+        vkAccessToken: String,
+        vkGroupId: String,
+    ) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_BOT_TOKEN] = botToken.trim()
+            prefs[KEY_CHANNEL_ID] = channelId.trim()
+            if (channelLink.isNullOrBlank()) prefs.remove(KEY_CHANNEL_LINK)
+            else prefs[KEY_CHANNEL_LINK] = channelLink.trim()
+            prefs[KEY_MAX_BOT_TOKEN] = maxBotToken.trim()
+            prefs[KEY_MAX_CHAT_ID] = maxChatId.trim()
+            prefs[KEY_VK_ACCESS_TOKEN] = vkAccessToken.trim()
+            prefs[KEY_VK_GROUP_ID] = vkGroupId.trim()
+        }
+    }
+
     suspend fun clearAll() {
         context.dataStore.edit { prefs ->
             prefs.remove(KEY_PIN_HASH)

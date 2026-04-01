@@ -82,14 +82,23 @@ object TaskLogic {
 
     fun formatCleaningType(key: String): String = CLEANING_TYPES[key] ?: key
 
-    fun formatEmployeeName(employeeKey: String): String {
-        val names = mapOf(
-            "dina" to "ДИНА",
-            "lena" to "ЛЕНА",
-            "olya" to "ОЛЯ",
-            "admin" to "АДМИНИСТРАТОР",
-        )
-        return names[employeeKey.lowercase()] ?: employeeKey.uppercase()
+    private val LEGACY_EMPLOYEE_NAMES: Map<String, String> = mapOf(
+        "dina" to "ДИНА",
+        "lena" to "ЛЕНА",
+        "olya" to "ОЛЯ",
+        "admin" to "АДМИНИСТРАТОР",
+    )
+
+    /** [displayNamesByKey] — ключи в нижнем регистре; подставляется из справочника сотрудников в БД. */
+    fun formatEmployeeName(
+        employeeKey: String,
+        displayNamesByKey: Map<String, String> = emptyMap(),
+    ): String {
+        val k = employeeKey.lowercase(Locale.ROOT)
+        displayNamesByKey[k]?.let { return it }
+        displayNamesByKey.entries.find { it.key.equals(employeeKey, ignoreCase = true) }?.value?.let { return it }
+        LEGACY_EMPLOYEE_NAMES[k]?.let { return it }
+        return employeeKey.uppercase(Locale.ROOT)
     }
 
     fun formatArea(value: Double): String {
@@ -480,8 +489,9 @@ object TaskLogic {
         comment: String?,
         /** Если задано (например автозадание Bnovo) — дата уборки «завтра». */
         taskForDate: LocalDate? = null,
+        employeeDisplayNames: Map<String, String> = emptyMap(),
     ): String {
-        val empName = formatEmployeeName(employeeKey)
+        val empName = formatEmployeeName(employeeKey, employeeDisplayNames)
         val limit = AREA_LIMIT
         val remainder = limit - totalArea
 
@@ -664,11 +674,12 @@ object TaskLogic {
         rooms: List<QueueItem>,
         totalArea: Double,
         comment: String?,
+        employeeDisplayNames: Map<String, String> = emptyMap(),
     ): String {
         val totalArea0 = round(totalArea).toInt()
         val lines = mutableListOf<String>()
         lines += "📋 Задание #$taskId"
-        lines += "👤 ${formatEmployeeName(employeeKey)}"
+        lines += "👤 ${formatEmployeeName(employeeKey, employeeDisplayNames)}"
         lines += "🕐 ${formatDateTime(createdAtMillis)}"
         lines += "📊 ${totalArea0} м², помещений: ${rooms.size}"
         lines += ""

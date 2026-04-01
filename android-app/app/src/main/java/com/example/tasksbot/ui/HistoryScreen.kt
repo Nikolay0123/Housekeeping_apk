@@ -64,14 +64,7 @@ fun HistoryScreen(
                     )
                 } else if (state.selectedTask != null) {
                     val task = state.selectedTask
-                    val detailText = com.example.tasksbot.domain.TaskLogic.formatHistoryDetailText(
-                        taskId = task.task.id,
-                        createdAtMillis = task.task.createdAtEpochMillis,
-                        employeeKey = task.task.employeeKey,
-                        rooms = task.rooms,
-                        totalArea = task.task.totalArea,
-                        comment = task.task.comment,
-                    )
+                    val detailText = vm.formatHistoryDetail(task)
 
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -117,8 +110,7 @@ fun HistoryScreen(
                                 )
                                 for (t in group.items) {
                                     val timeStr = vm.formatTaskTime(t.task.createdAtEpochMillis)
-                                    val emp =
-                                        com.example.tasksbot.domain.TaskLogic.formatEmployeeName(t.task.employeeKey)
+                                    val emp = vm.formatEmployeeLabel(t.task.employeeKey)
                                     val total0 = round(t.task.totalArea).toInt()
                                     val count = t.rooms.size
 

@@ -7,21 +7,25 @@ import androidx.lifecycle.viewModelScope
 import com.example.tasksbot.domain.TaskLogic
 import com.example.tasksbot.db.AppDatabase
 import com.example.tasksbot.domain.QueueItem
+import com.example.tasksbot.repository.EmployeesRepository
 import com.example.tasksbot.repository.TasksRepository
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Locale
 
 class HistoryViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getInstance(application)
     private val tasksRepo = TasksRepository(db)
+    private val employeesRepo = EmployeesRepository(db)
 
     data class UiState(
         val isLoading: Boolean = true,
         val error: String? = null,
         val groups: List<DateGroup> = emptyList(),
         val selectedTask: TasksRepository.TaskWithRooms? = null,
+        val employeeNameByKey: Map<String, String> = emptyMap(),
     )
 
     data class DateGroup(
@@ -39,8 +43,11 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
         state.value = state.value.copy(isLoading = true, error = null, selectedTask = null)
         viewModelScope.launch {
             try {
+                employeesRepo.ensureSeeded()
+                val nameMap = employeesRepo.getAll().associate {
+                    it.key.lowercase(Locale.ROOT) to it.displayName
+                }
                 val tasks = tasksRepo.getLast50Tasks()
-                // Группировка по дате (как в Python)
                 val grouped: LinkedHashMap<LocalDate, MutableList<TasksRepository.TaskWithRooms>> = linkedMapOf()
                 for (t in tasks) {
                     val date = Instant.ofEpochMilli(t.task.createdAtEpochMillis)
@@ -54,7 +61,12 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
                     DateGroup(date = d, items = grouped[d].orEmpty())
                 }
 
-                state.value = state.value.copy(isLoading = false, groups = groups, selectedTask = null)
+                state.value = state.value.copy(
+                    isLoading = false,
+                    groups = groups,
+                    selectedTask = null,
+                    employeeNameByKey = nameMap,
+                )
             } catch (e: Exception) {
                 state.value = state.value.copy(
                     isLoading = false,
@@ -76,6 +88,19 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
 
     fun formatTaskTime(millis: Long): String = TaskLogic.formatTimeHHmm(millis)
 
+    fun formatEmployeeLabel(employeeKey: String): String =
+        TaskLogic.formatEmployeeName(employeeKey, state.value.employeeNameByKey)
+
+    fun formatHistoryDetail(task: TasksRepository.TaskWithRooms): String =
+        TaskLogic.formatHistoryDetailText(
+            taskId = task.task.id,
+            createdAtMillis = task.task.createdAtEpochMillis,
+            employeeKey = task.task.employeeKey,
+            rooms = task.rooms,
+            totalArea = task.task.totalArea,
+            comment = task.task.comment,
+            employeeDisplayNames = state.value.employeeNameByKey,
+        )
+
     fun countRooms(rooms: List<QueueItem>): Int = rooms.size
 }
-

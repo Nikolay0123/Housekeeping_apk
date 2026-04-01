@@ -13,14 +13,18 @@ import com.example.tasksbot.network.BnovoClient
 import com.example.tasksbot.network.NetworkStatus
 import com.example.tasksbot.network.MaxClient
 import com.example.tasksbot.network.VkClient
+import com.example.tasksbot.db.EmployeeEntity
+import com.example.tasksbot.repository.EmployeesRepository
 import com.example.tasksbot.repository.RoomsRepository
 import com.example.tasksbot.repository.TasksRepository
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.util.Locale
 
 class CreateTaskViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getInstance(application)
     private val roomsRepo = RoomsRepository(db)
+    private val employeesRepo = EmployeesRepository(db)
     private val tasksRepo = TasksRepository(db)
     private val maxClient = MaxClient()
     private val vkClient = VkClient()
@@ -58,7 +62,9 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
 
     data class UiState(
         val step: Step = Step.ChooseEmployee,
-        val currentEmployeeKey: String = "dina",
+        val currentEmployeeKey: String = "",
+        val employees: List<EmployeeEntity> = emptyList(),
+        val employeeNameByKey: Map<String, String> = emptyMap(),
         val activeRooms: List<RoomEntity> = emptyList(),
         val selectedRooms: List<QueueItem> = emptyList(),
         val comment: String? = null,
@@ -91,6 +97,8 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             try {
                 roomsRepo.ensureSeeded()
                 val rooms = roomsRepo.getActiveRooms()
+                employeesRepo.ensureSeeded()
+                refreshEmployees()
                 state.value = state.value.copy(activeRooms = rooms)
             } catch (e: Exception) {
                 state.value = state.value.copy(error = e.message ?: "Ошибка при инициализации")
@@ -98,7 +106,48 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    private suspend fun refreshEmployees() {
+        val list = employeesRepo.getAll()
+        val map = list.associate { it.key.lowercase(Locale.ROOT) to it.displayName }
+        var st = state.value.copy(employees = list, employeeNameByKey = map)
+        if (list.isNotEmpty()) {
+            if (list.none { it.key.equals(st.currentEmployeeKey, ignoreCase = true) }) {
+                st = st.copy(currentEmployeeKey = list.first().key)
+            }
+        }
+        state.value = st
+    }
+
+    fun addEmployee(displayName: String, keyCandidate: String?) {
+        viewModelScope.launch {
+            employeesRepo.add(displayName, keyCandidate).fold(
+                onSuccess = {
+                    state.value = state.value.copy(error = null)
+                    refreshEmployees()
+                },
+                onFailure = { e ->
+                    state.value = state.value.copy(error = e.message ?: "Не удалось добавить сотрудника")
+                },
+            )
+        }
+    }
+
+    fun deleteEmployee(id: Int) {
+        viewModelScope.launch {
+            employeesRepo.deleteById(id).fold(
+                onSuccess = {
+                    state.value = state.value.copy(error = null)
+                    refreshEmployees()
+                },
+                onFailure = { e ->
+                    state.value = state.value.copy(error = e.message ?: "Не удалось удалить")
+                },
+            )
+        }
+    }
+
     fun selectEmployee(employeeKey: String) {
+        if (employeeKey.isBlank()) return
         state.value = state.value.copy(
             step = Step.Rooms,
             currentEmployeeKey = employeeKey,
@@ -175,7 +224,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
         val trimmedId = accountId.trim()
         val trimmedKey = apiKey.trim()
         if (trimmedId.isEmpty() || trimmedKey.isEmpty()) {
-            state.value = state.value.copy(error = "Настройте Bnovo: меню → Ссылка на канал.")
+            state.value = state.value.copy(error = "Настройте Bnovo: меню → Настройки.")
             return
         }
         if (!NetworkStatus.hasInternet(getApplication())) {
@@ -636,6 +685,10 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
 
     fun sendTask(botToken: String, channelId: String) {
         val current = state.value
+        if (current.currentEmployeeKey.isBlank()) {
+            state.value = current.copy(error = "Выберите сотрудника.")
+            return
+        }
         if (current.selectedRooms.isEmpty()) {
             state.value = current.copy(error = "Очередь пуста. Добавьте помещения.")
             return
@@ -663,6 +716,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                     totalArea = total,
                     comment = current.comment,
                     taskForDate = current.taskForChannelDate,
+                    employeeDisplayNames = current.employeeNameByKey,
                 )
                 state.value = state.value.copy(
                     isSending = false,
@@ -687,6 +741,10 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
 
     fun sendTaskMax(maxBotToken: String, maxChatId: String) {
         val current = state.value
+        if (current.currentEmployeeKey.isBlank()) {
+            state.value = current.copy(error = "Выберите сотрудника.")
+            return
+        }
         if (current.selectedRooms.isEmpty()) {
             state.value = current.copy(error = "Очередь пуста. Добавьте помещения.")
             return
@@ -713,6 +771,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                     totalArea = total,
                     comment = current.comment,
                     taskForDate = current.taskForChannelDate,
+                    employeeDisplayNames = current.employeeNameByKey,
                 )
                 maxClient.sendMessage(
                     botToken = maxBotToken,
@@ -748,6 +807,10 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
 
     fun sendTaskVk(vkAccessToken: String, vkGroupId: String) {
         val current = state.value
+        if (current.currentEmployeeKey.isBlank()) {
+            state.value = current.copy(error = "Выберите сотрудника.")
+            return
+        }
         if (current.selectedRooms.isEmpty()) {
             state.value = current.copy(error = "Очередь пуста. Добавьте помещения.")
             return
@@ -774,6 +837,7 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
                     totalArea = total,
                     comment = current.comment,
                     taskForDate = current.taskForChannelDate,
+                    employeeDisplayNames = current.employeeNameByKey,
                 )
                 val ownerId = "-${vkGroupId.trim()}"
                 vkClient.postWall(

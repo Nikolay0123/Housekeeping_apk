@@ -12,7 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddTask
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.HomeWork
-import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,7 +27,7 @@ fun MainMenuScreen(
     onCreateTask: () -> Unit,
     onHistory: () -> Unit,
     onRooms: () -> Unit,
-    onChannelLink: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val scroll = rememberScrollState()
     Column(
@@ -70,10 +70,10 @@ fun MainMenuScreen(
             onClick = onRooms,
         )
         MenuDestinationCard(
-            icon = Icons.Outlined.Link,
-            title = "Ссылка на канал",
-            subtitle = "Telegram, MAX, VK и интеграция Bnovo",
-            onClick = onChannelLink,
+            icon = Icons.Outlined.Settings,
+            title = "Настройки",
+            subtitle = "Telegram, MAX, VK, Bnovo — токены и ID",
+            onClick = onOpenSettings,
         )
     }
 }

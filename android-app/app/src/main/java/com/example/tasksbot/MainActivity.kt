@@ -22,7 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.tasksbot.ui.AuthViewModel
-import com.example.tasksbot.ui.ChannelLinkScreen
+import com.example.tasksbot.ui.SettingsScreen
 import com.example.tasksbot.ui.CreateTaskScreen
 import com.example.tasksbot.ui.HistoryScreen
 import com.example.tasksbot.ui.LoginScreen
@@ -48,7 +48,7 @@ private enum class Section {
     CreateTask,
     History,
     RoomManagement,
-    ChannelLink,
+    Settings,
 }
 
 @Composable
@@ -94,7 +94,7 @@ private fun AppRoot() {
                         onCreateTask = { section = Section.CreateTask },
                         onHistory = { section = Section.History },
                         onRooms = { section = Section.RoomManagement },
-                        onChannelLink = { section = Section.ChannelLink },
+                        onOpenSettings = { section = Section.Settings },
                     )
                     Section.CreateTask -> CreateTaskScreen(
                         onBackToMenu = { section = Section.MainMenu },
@@ -106,7 +106,7 @@ private fun AppRoot() {
                     Section.RoomManagement -> RoomManagementScreen(
                         onBackToMenu = { section = Section.MainMenu }
                     )
-                    Section.ChannelLink -> ChannelLinkScreen(
+                    Section.Settings -> SettingsScreen(
                         onBackToMenu = { section = Section.MainMenu }
                     )
                 }
