@@ -352,7 +352,8 @@ object AutoTaskFromBnovo {
         if (staying.isNotEmpty()) {
             val b = staying.minByOrNull { it.arrival } ?: return null
             val dayNum = dayIndexFromArrival(b.arrival, C)
-            if (dayNum >= 2 && dayNum % 3 == 0) return "current_linen"
+            // Смена белья: каждый 3-й день пребывания, со сдвигом на день (4-й, 7-й, 10-й…; день заезда = 1).
+            if (dayNum >= 2 && (dayNum - 1) % 3 == 0) return "current_linen"
             if (dayNum >= 2) return "current"
             return null
         }
