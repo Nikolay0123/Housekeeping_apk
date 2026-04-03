@@ -116,6 +116,18 @@ object AutoTaskFromBnovo {
         floorChoice = FloorChoice.Fourth,
     )
 
+    /**
+     * Приоритет в очереди уборки (меньше — раньше): выезд/заезд → выезд → текущая/смена белья → текущая.
+     * Прочие ключи (например [general]) — после «текущей».
+     */
+    private fun cleaningTypeQueueRank(cleaningType: String): Int = when (cleaningType) {
+        "departure_arrival" -> 0
+        "departure" -> 1
+        "current_linen" -> 2
+        "current" -> 3
+        else -> 4
+    }
+
     private fun planOrderedRooms(
         roomNames: List<String>,
         commonNames: List<String>,
@@ -128,6 +140,8 @@ object AutoTaskFromBnovo {
         var runningArea = 0.0
         val limit = TaskLogic.AREA_LIMIT
 
+        val numbered = ArrayList<PlannedRoom>()
+        val roomIndexByName = roomNames.withIndex().associate { it.value to it.index }
         for (name in roomNames) {
             val ent = activeRoomsByName[name] ?: continue
             val key = cleaningTypeForRoom(
@@ -141,8 +155,14 @@ object AutoTaskFromBnovo {
                 bookings = bookingsByRoom[name].orEmpty(),
                 cleaningDate = cleaningDate,
             )
-            queue.add(planned)
-            runningArea += ent.area
+            numbered.add(planned)
+        }
+        numbered.sortWith(
+            compareBy({ cleaningTypeQueueRank(it.cleaningType) }, { roomIndexByName[it.entity.name] ?: 0 }),
+        )
+        for (p in numbered) {
+            queue.add(p)
+            runningArea += p.entity.area
         }
 
         for (name in commonNames) {
