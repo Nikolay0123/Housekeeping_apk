@@ -161,6 +161,9 @@ object TaskLogic {
     const val LINEN_VARIANT_FLOOR4_JOINED: Int = 11
     const val LINEN_VARIANT_FLOOR4_SPLIT: Int = 12
 
+    /** Номера 101 и 107: фиксированный комплект без выбора раскладки кроватей. */
+    const val LINEN_VARIANT_CLASSIC_101_107: Int = 7
+
     private val FLOOR4_PER_BED_ROOM_NAMES: Set<String> = setOf(
         "Номер 401.2", "Номер 401.3", "Номер 401.4",
         "Номер 402.1", "Номер 402.2", "Номер 402.3",
@@ -240,9 +243,9 @@ object TaskLogic {
             "Полотенце для лица" to 2,
             "Полотенце для ног" to 1,
         ),
-        /** Номер 109 — кровати соединены (автозадание Bnovo). */
+        /** Номер 109 — кровати соединены (Bnovo / мастер «Соединены»). */
         5 to mapOf(
-            "Простыня люкс" to 1,
+            "Простыня 240х275" to 1,
             "Пододеяльник двуспальный" to 1,
             "Наволочка" to 2,
             "Полотенце банное с вышивкой" to 2,
@@ -260,17 +263,26 @@ object TaskLogic {
             "Полотенце для ног" to 1,
             "Халат вафельный" to 1,
         ),
+        /** Номера 101 и 107 — без мастера кроватей (не путать с вариантом 1: по одному банному и лицевому полотенцу). */
+        LINEN_VARIANT_CLASSIC_101_107 to mapOf(
+            "Простыня двуспальная" to 1,
+            "Пододеяльник двуспальный" to 1,
+            "Наволочка" to 2,
+            "Полотенце банное с вышивкой" to 1,
+            "Полотенце для лица" to 1,
+            "Полотенце для ног" to 1,
+        ),
     )
 
-    /** Номер 108: фиксированный люкс-комплект с махровым халатом (linenVariant = 3). */
+    /** Номер 108: фиксированный люкс-комплект (linenVariant = 3, без мастера кроватей). */
     val LINEN_PACKAGE_108: Map<String, Int> = mapOf(
         "Простыня люкс" to 1,
         "Пододеяльник люкс" to 1,
-        "Наволочка с люкс (с вышивкой)" to 4,
+        "Наволочка с широкой полоской" to 4,
         "Полотенце банное с вышивкой" to 2,
         "Полотенце для лица" to 2,
         "Полотенце для ног" to 1,
-        "Халат махровый" to 1,
+        "Халат махровый" to 2,
     )
 
     /** Одна заправляемая кровать (масштаб по [linenBeds] для варианта [LINEN_VARIANT_FLOOR4_PER_BED]). */
@@ -328,6 +340,11 @@ object TaskLogic {
     fun isRoom108(roomName: String): Boolean = roomName.trim() == "Номер 108"
 
     fun isRoom109(roomName: String): Boolean = roomName.trim() == "Номер 109"
+
+    fun isRoom101Or107(roomName: String): Boolean {
+        val n = roomName.trim()
+        return n == "Номер 101" || n == "Номер 107"
+    }
 
     fun classicLinenQuantities(item: QueueItem): LinkedHashMap<String, Int>? {
         val v = item.linenVariant ?: return null
@@ -444,6 +461,7 @@ object TaskLogic {
         4 -> "Вариант 4 — люкс + двуспальный пододеяльник"
         5 -> "Номер 109 — соединённые кровати"
         6 -> "Номер 109 — разъединённые кровати"
+        LINEN_VARIANT_CLASSIC_101_107 -> "Номера 101 и 107 — фиксированный комплект"
         else -> "Вариант $variant"
     }
 
@@ -713,6 +731,8 @@ object TaskLogic {
                 extra = ", 109 разд. — ${bk} кров."
             } else if (profile == "classic" && r.linenVariant == 5) {
                 extra = ", 109 соед."
+            } else if (profile == "classic" && r.linenVariant == LINEN_VARIANT_CLASSIC_101_107) {
+                extra = ", 101/107 фикс."
             }
 
             val area0 = round(r.area).toInt()

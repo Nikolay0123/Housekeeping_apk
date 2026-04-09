@@ -237,6 +237,7 @@ object AutoTaskFromBnovo {
     fun needsBedConfigurationFirstFloor(roomName: String, cleaningType: String): Boolean {
         if (roomName !in FLOOR1_NUMBER_NAMES) return false
         if (TaskLogic.isRoom108(roomName)) return false
+        if (TaskLogic.isRoom101Or107(roomName)) return false
         val linen = TaskLogic.roomLinenProfile(roomName)
         if (linen != "classic") return false
         return cleaningType != "current"
@@ -300,6 +301,16 @@ object AutoTaskFromBnovo {
                 area = room.area,
                 cleaningType = ct,
                 linenVariant = 3,
+            )
+        }
+
+        if (TaskLogic.isRoom101Or107(room.name)) {
+            return QueueItem(
+                id = room.id,
+                name = room.name,
+                area = room.area,
+                cleaningType = ct,
+                linenVariant = TaskLogic.LINEN_VARIANT_CLASSIC_101_107,
             )
         }
 

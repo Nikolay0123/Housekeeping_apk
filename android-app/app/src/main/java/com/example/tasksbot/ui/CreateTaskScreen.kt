@@ -1168,6 +1168,7 @@ private fun QueueRow(
             val bk = TaskLogic.classicVariant2BedsLabel(item.linenBeds)
             " (109 разд., $bk кров.)"
         }
+        profile == "classic" && item.linenVariant == TaskLogic.LINEN_VARIANT_CLASSIC_101_107 -> " (101/107)"
         else -> ""
     }
 

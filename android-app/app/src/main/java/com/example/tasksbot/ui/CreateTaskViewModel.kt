@@ -436,6 +436,26 @@ class CreateTaskViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
+        if (linenProfile == "classic" &&
+            cleaningTypeKey != "current" &&
+            TaskLogic.isRoom101Or107(room.name)
+        ) {
+            val added = QueueItem(
+                id = room.id,
+                name = room.name,
+                area = room.area,
+                cleaningType = cleaningTypeKey,
+                linenVariant = TaskLogic.LINEN_VARIANT_CLASSIC_101_107,
+            )
+            state.value = state.value.copy(
+                step = Step.Rooms,
+                selectedRooms = state.value.selectedRooms + added,
+                pendingAdd = null,
+                error = null,
+            )
+            return
+        }
+
         if (linenProfile != null && cleaningTypeKey != "current") {
             state.value = state.value.copy(
                 step = Step.ChooseLinenVariant,
