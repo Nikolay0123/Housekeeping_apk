@@ -245,13 +245,13 @@ object TaskLogic {
         ),
         /** Номер 109 — кровати соединены (Bnovo / мастер «Соединены»). */
         5 to mapOf(
-            "Простыня 240х275" to 1,
-            "Пододеяльник двуспальный" to 1,
-            "Наволочка" to 2,
+            "Простыня 240х275 для полулюкса" to 1,
+            "Пододеяльник 200х220 с широкой полоской" to 1,
+            "Наволочка с вышивкой" to 2,
             "Полотенце банное с вышивкой" to 2,
             "Полотенце для лица" to 2,
             "Полотенце для ног" to 1,
-            "Халат вафельный" to 1,
+            "Халат вафельный" to 2,
         ),
         /** Номер 109 — разъединены; масштаб как у варианта 2 при linenBeds. */
         6 to mapOf(
@@ -276,9 +276,9 @@ object TaskLogic {
 
     /** Номер 108: фиксированный люкс-комплект (linenVariant = 3, без мастера кроватей). */
     val LINEN_PACKAGE_108: Map<String, Int> = mapOf(
-        "Простыня люкс" to 1,
-        "Пододеяльник люкс" to 1,
-        "Наволочка с широкой полоской" to 4,
+        "Простыня для люкса" to 1,
+        "Пододеяльник 200х220 с широкой полоской для люкса" to 1,
+        "Наволочка белая с широкой полоской для люкса" to 4,
         "Полотенце банное с вышивкой" to 2,
         "Полотенце для лица" to 2,
         "Полотенце для ног" to 1,
@@ -481,7 +481,7 @@ object TaskLogic {
         val v = item.linenVariant ?: return emptyList()
         val lines = mutableListOf<String>()
         when {
-            profile == "classic" && (v in LINEN_PACKAGES || (isRoom108(item.name) && v == 3)) -> {
+            profile == "classic" -> {
                 val pkg = classicLinenQuantities(item) ?: return emptyList()
                 lines += "🧺 Бельё (${classicLinenVariantButtonTitle(v)}):"
                 lines += formatLinenPackageLines(pkg)
@@ -555,11 +555,13 @@ object TaskLogic {
 
             val ct = formatCleaningType(r.cleaningType)
             val profile = resolveLinenProfile(r)
+            val classicLinenPkg = if (profile == "classic") classicLinenQuantities(r) else null
+            val floor4LinenPkg = if (profile == "floor4") floor4LinenQuantities(r) else null
 
             var bedConfig = ""
             if (r.linenVariant != null) {
                 val variant = r.linenVariant
-                if (profile == "classic" && (variant in LINEN_PACKAGES || (isRoom108(r.name) && variant == 3))) {
+                if (profile == "classic" && classicLinenPkg != null) {
                     bedConfig = when (variant) {
                         1 -> " — кровати соединены"
                         2 -> {
@@ -609,29 +611,21 @@ object TaskLogic {
                 lines += "    $ln"
             }
 
-            // Totals calculation (под бельё)
-            if (r.linenVariant != null) {
-                val variant = r.linenVariant
-
-                if (profile == "floor4") {
-                    val pkg = floor4LinenQuantities(r) ?: continue
-                    for ((itemName, qty) in pkg) addLinenItem(itemName, qty)
-                    if (variant == LINEN_VARIANT_FLOOR4_PER_BED) {
-                        val ck = r.linenColor
-                        // В итог «по цвету» считаем условные единицы (составляющие комплекта × кроватей).
-                        if (ck != null && ck in LINEN_COLORS) {
-                            val label = LINEN_COLORS[ck]!!
-                            val sumQty = pkg.values.sum()
-                            linenColorTotals[label] = (linenColorTotals[label] ?: 0) + sumQty
-                        }
-                    }
-                } else if (profile == "classic" && (variant in LINEN_PACKAGES || (isRoom108(r.name) && variant == 3))) {
-                    val pkg = classicLinenQuantities(r)
-                    if (pkg != null) {
-                        for ((itemName, qty) in pkg) addLinenItem(itemName, qty)
-                        linenColorTotals["белое"] = (linenColorTotals["белое"] ?: 0) + pkg.values.sum()
+            // Totals: те же комплекты, что в детализации по номеру (classicLinenQuantities / floor4LinenQuantities).
+            if (floor4LinenPkg != null) {
+                val variant = r.linenVariant ?: 0
+                for ((itemName, qty) in floor4LinenPkg) addLinenItem(itemName, qty)
+                if (variant == LINEN_VARIANT_FLOOR4_PER_BED) {
+                    val ck = r.linenColor
+                    if (ck != null && ck in LINEN_COLORS) {
+                        val label = LINEN_COLORS[ck]!!
+                        val sumQty = floor4LinenPkg.values.sum()
+                        linenColorTotals[label] = (linenColorTotals[label] ?: 0) + sumQty
                     }
                 }
+            } else if (classicLinenPkg != null) {
+                for ((itemName, qty) in classicLinenPkg) addLinenItem(itemName, qty)
+                linenColorTotals["белое"] = (linenColorTotals["белое"] ?: 0) + classicLinenPkg.values.sum()
             }
         }
 
@@ -665,6 +659,7 @@ object TaskLogic {
             for ((itemName, qty) in linenTotals) {
                 lines += "• $itemName: $qty шт."
             }
+            lines += "• Всего единиц (сумма строк выше): ${linenTotals.values.sum()} шт."
         }
 
         if (!comment.isNullOrBlank()) {
